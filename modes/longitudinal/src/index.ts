@@ -68,6 +68,7 @@ const extensionDependencies = {
   '@ohif/extension-cornerstone-dicom-rt': '^3.0.0',
   '@ohif/extension-dicom-pdf': '^3.0.1',
   '@ohif/extension-dicom-video': '^3.0.1',
+  '@ohif/extension-left-toolbar': '^1.0.0',
 };
 
 function modeFactory({ modeConfiguration }) {
@@ -244,9 +245,9 @@ function modeFactory({ modeConfiguration }) {
           return {
             id: ohif.layout,
             props: {
-              leftPanels: [tracked.thumbnailList],
+              leftPanels: ['@ohif/extension-left-toolbar.panelModule.leftRailToolbarPanel'],
               leftPanelResizable: true,
-              rightPanels: [cornerstone.segmentation, tracked.measurements],
+              rightPanels: [tracked.thumbnailList, cornerstone.segmentation, tracked.measurements],
               rightPanelClosed: true,
               rightPanelResizable: true,
               viewports: [
