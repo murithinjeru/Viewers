@@ -1,7 +1,12 @@
 /** @type {AppTypes.Config} */
 window.config = {
   routerBasename: null,
-  extensions: ['@ohif/extension-left-toolbar'],
+  extensions: [
+    '@ohif/extension-cornerstone',
+    '@ohif/extension-default',
+    '@ohif/extension-measurement-tracking',
+    '@ohif/extension-left-toolbar',
+  ],
   modes: ['@ohif/mode-longitudinal'],
   showStudyList: true,
   // below flag is for performance reasons, but it might not work for all servers
@@ -17,30 +22,32 @@ window.config = {
     '@ohif/extension-default.customizationModule.helloPage',
   ],
 
-  defaultDataSourceName: 'e2e',
+  defaultDataSourceName: 'orthanc-local',
   investigationalUseDialog: {
     option: 'never',
   },
   dataSources: [
     {
       namespace: '@ohif/extension-default.dataSourcesModule.dicomweb',
-      sourceName: 'e2e',
+      sourceName: 'orthanc-local',
       configuration: {
-        friendlyName: 'StaticWado test data',
-        // The most important field to set for static WADO
-        staticWado: true,
-        name: 'StaticWADO',
-        wadoUriRoot: '/viewer-testdata',
-        qidoRoot: '/viewer-testdata',
-        wadoRoot: '/viewer-testdata',
-        qidoSupportsIncludeField: false,
+        friendlyName: 'Local Orthanc (DICOMweb)',
+        name: 'orthanc',
+        // DO NOT use staticWado for a live DICOMweb server
+        staticWado: false,
+        // Point to Orthanc dicom-web plugin endpoint (default Orthanc HTTP port = 8042)
+        qidoRoot: 'http://localhost:8043/dicom-web/',
+        wadoUriRoot: 'http://localhost:8043/wado',
+        wadoRoot: 'http://localhost:8043/dicom-web/',
+        qidoSupportsIncludeField: true,
+        supportsReject: true,
+        supportsStow: true,
         imageRendering: 'wadors',
         thumbnailRendering: 'wadors',
         enableStudyLazyLoad: true,
         supportsFuzzyMatching: false,
         supportsWildcard: true,
-        singlepart: 'video,thumbnail,pdf',
-        omitQuotationForMultipartRequest: true,
+        singlepart: 'bulkdata,video,pdf',
         bulkDataURI: {
           enabled: true,
           relativeResolution: 'studies',

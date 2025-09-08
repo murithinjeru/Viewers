@@ -20,6 +20,10 @@ const cornerstone = {
   segmentation: '@ohif/extension-cornerstone.panelModule.panelSegmentation',
 };
 
+const cornerstoneViewport = {
+  viewport: '@ohif/extension-cornerstone.viewportModule.cornerstone', // or the exact namespace your build exposes
+};
+
 const tracked = {
   measurements: '@ohif/extension-measurement-tracking.panelModule.trackedMeasurements',
   thumbnailList: '@ohif/extension-measurement-tracking.panelModule.seriesList',
@@ -242,15 +246,63 @@ function modeFactory({ modeConfiguration }) {
           //defaultViewerRouteInit
         },*/
         layoutTemplate: () => {
+          const isMobile = window.innerWidth < 768;
+
+          if (isMobile) {
+            return {
+              id: ohif.layout,
+              props: {
+                // Only viewport visible
+                leftPanels: ['@ohif/extension-left-toolbar.panelModule.leftRailToolbarPanel'],
+                leftPanelResizable: false,
+                leftPanelInitialExpandedWidth: 60,
+                leftPanelMinimumExpandedWidth: 60,
+                rightPanels: [
+                  tracked.thumbnailList,
+                  cornerstone.segmentation,
+                  tracked.measurements,
+                ],
+                rightPanelResizable: false,
+                rightPanelInitialExpandedWidth: 150,
+                rightPanelMinimumExpandedWidth: 150,
+                leftPanelClosed: false,
+                rightPanelClosed: true,
+                viewports: [
+                  {
+                    namespace: '@ohif/extension-cornerstone.viewportModule.cornerstone',
+                    displaySetsToDisplay: [ohif.sopClassHandler],
+                  },
+                ],
+              },
+            };
+          }
+
+          // Desktop layout
+
           return {
             id: ohif.layout,
             props: {
               leftPanels: ['@ohif/extension-left-toolbar.panelModule.leftRailToolbarPanel'],
-              leftPanelResizable: true,
+              leftPanelResizable: false,
+              leftPanelInitialExpandedWidth: 50,
+              leftPanelMinimumExpandedWidth: 50,
               rightPanels: [tracked.thumbnailList, cornerstone.segmentation, tracked.measurements],
               rightPanelClosed: true,
               rightPanelResizable: true,
+              rightPanelInitialExpandedWidth: 150,
+              rightPanelMinimumExpandedWidth: 200,
               viewports: [
+                {
+                  namespace: '@ohif/extension-cornerstone.viewportModule.cornerstone',
+                  displaySetsToDisplay: [
+                    ohif.sopClassHandler, // stack handler (CT/MR etc)
+                    dicomvideo.sopClassHandler, // video
+                    dicomsr.sopClassHandler3D,
+                    ohif.wsiSopClassHandler,
+                  ],
+                },
+                // keep your other viewports for SR, PDF, SEG, etc.
+
                 {
                   namespace: tracked.viewport,
                   displaySetsToDisplay: [

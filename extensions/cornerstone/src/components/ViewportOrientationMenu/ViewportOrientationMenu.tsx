@@ -24,8 +24,17 @@ function ViewportOrientationMenu({
 }>) {
   const { servicesManager, commandsManager } = useSystem();
   const { cornerstoneViewportService, toolbarService } = servicesManager.services;
+
+  //const viewportInfo = cornerstoneViewportService.getViewportInfo(viewportId);
+  //const viewportOrientation = viewportInfo.getOrientation();
+
   const viewportInfo = cornerstoneViewportService.getViewportInfo(viewportId);
-  const viewportOrientation = viewportInfo.getOrientation();
+
+  // Defensive: viewportInfo may be undefined or not yet ready
+  const viewportOrientation =
+    viewportInfo && typeof viewportInfo.getOrientation === 'function'
+      ? viewportInfo.getOrientation()
+      : 'axial'; // fallback orientation
 
   const [gridState] = useViewportGrid();
   const viewportIdToUse = viewportId || gridState.activeViewportId;
