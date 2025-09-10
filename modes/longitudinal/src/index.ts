@@ -96,6 +96,7 @@ function modeFactory({ modeConfiguration }) {
       initToolGroups(extensionManager, toolGroupService, commandsManager);
 
       toolbarService.register(toolbarButtons);
+
       toolbarService.updateSection(toolbarService.sections.primary, [
         'MeasurementTools',
         'Zoom',
@@ -282,6 +283,7 @@ function modeFactory({ modeConfiguration }) {
           return {
             id: ohif.layout,
             props: {
+              hideToolbar: true, // 👈 hides the default top toolbar
               leftPanels: ['@ohif/extension-left-toolbar.panelModule.leftRailToolbarPanel'],
               leftPanelResizable: false,
               leftPanelInitialExpandedWidth: 50,

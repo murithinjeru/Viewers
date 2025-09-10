@@ -13,184 +13,6 @@ const colorsByOrientation = {
 };
 
 function initDefaultToolGroup(extensionManager, toolGroupService, commandsManager, toolGroupId) {
-  if (!toolGroupService) {
-    console.warn('toolGroupService missing');
-    return;
-  }
-
-  // Try creation APIs
-  let tg = null;
-  if (typeof toolGroupService.createToolGroup === 'function') {
-    tg = toolGroupService.createToolGroup(toolGroupId);
-  } else if (typeof toolGroupService.create === 'function') {
-    // fallback naming
-    tg = toolGroupService.create(toolGroupId);
-  } else if (typeof toolGroupService.createToolGroupAndAddTools === 'function') {
-    // older helper (if still present)
-    toolGroupService.createToolGroupAndAddTools(toolGroupId, []);
-    tg =
-      toolGroupService.getToolGroup(toolGroupId) ||
-      toolGroupService.getToolGroupForId?.(toolGroupId);
-  }
-
-  if (!tg) {
-    console.warn('Failed to create toolGroup with any known API; trying to get existing...');
-    tg =
-      toolGroupService.getToolGroup?.(toolGroupId) ||
-      toolGroupService.getToolGroupForViewport?.(toolGroupId);
-  }
-
-  if (!tg) {
-    console.error('Could not obtain toolGroup. Aborting initialization', toolGroupId);
-    return;
-  }
-
-  // Helper: safely call a method if it exists on either the toolGroup instance or on toolGroupService
-  const callMaybe = (obj, fnNames = [], ...args) => {
-    for (const name of fnNames) {
-      if (obj && typeof obj[name] === 'function') {
-        try {
-          return obj[name](...args);
-        } catch (err) {
-          console.warn(`callMaybe: ${name} threw`, err);
-        }
-      }
-    }
-  };
-
-  const utilityModule = extensionManager.getModuleEntry(
-    '@ohif/extension-cornerstone.utilityModule.tools'
-  );
-  const { toolNames, Enums } = utilityModule?.exports ?? {};
-
-  // Tools config — keep your existing list here; shortened for clarity
-  const tools = {
-    active: [
-      {
-        toolName: toolNames?.WindowLevel,
-        bindings: [{ mouseButton: Enums.MouseBindings.Primary }],
-      },
-      { toolName: toolNames?.Pan, bindings: [{ mouseButton: Enums.MouseBindings.Auxiliary }] },
-      {
-        toolName: toolNames?.Zoom,
-        bindings: [{ mouseButton: Enums.MouseBindings.Secondary }, { numTouchPoints: 2 }],
-      },
-      {
-        toolName: toolNames?.StackScroll,
-        bindings: [{ mouseButton: Enums.MouseBindings.Wheel }, { numTouchPoints: 3 }],
-      },
-    ],
-    passive: [
-      { toolName: toolNames?.Length },
-      {
-        toolName: toolNames?.ArrowAnnotate,
-        configuration: {
-          getTextCallback: (callback, eventDetails) => {
-            commandsManager.runCommand('arrowTextCallback', { callback, eventDetails });
-          },
-        },
-      },
-      { toolName: toolNames?.Bidirectional },
-      // ...other passive
-    ],
-    enabled: [{ toolName: toolNames?.ReferenceLines }],
-    disabled: [{ toolName: toolNames?.AdvancedMagnify }],
-  };
-
-  // Add tool helper: try tg.addTool, toolGroupService.addToolToGroup, toolGroupService.registerTool
-  const addTool = (toolName, configuration) => {
-    if (!toolName) {
-      return;
-    }
-    // prefer instance method first
-    if (typeof tg.addTool === 'function') {
-      return tg.addTool(toolName, configuration);
-    }
-    // fallback to service-level helper
-    if (typeof toolGroupService.addToolToGroup === 'function') {
-      return toolGroupService.addToolToGroup(toolGroupId, toolName, configuration);
-    }
-    if (typeof toolGroupService.registerTool === 'function') {
-      return toolGroupService.registerTool(toolGroupId, toolName, configuration);
-    }
-    // last resort: try a generic "add" on the group
-    return callMaybe(tg, ['registerTool', 'createToolInstance'], toolName, configuration);
-  };
-
-  // Set tool state helpers — try a few names
-  const setToolActive = (t, bindings) =>
-    callMaybe(tg, ['setToolActive', 'activateTool', 'enableTool'], t, bindings) ||
-    callMaybe(toolGroupService, ['setToolActive', 'activateTool'], toolGroupId, t, bindings);
-
-  const setToolPassive = (t, config) =>
-    callMaybe(tg, ['setToolPassive', 'setToolPassiveState'], t, config) ||
-    callMaybe(toolGroupService, ['setToolPassive'], toolGroupId, t, config);
-
-  const setToolEnabled = t =>
-    callMaybe(tg, ['setToolEnabled', 'enableTool'], t) ||
-    callMaybe(toolGroupService, ['setToolEnabled'], toolGroupId, t);
-
-  const setToolDisabled = t =>
-    callMaybe(tg, ['setToolDisabled', 'disableTool'], t) ||
-    callMaybe(toolGroupService, ['setToolDisabled'], toolGroupId, t);
-
-  // Register tools & states
-  const registerCategory = (list, setter) => {
-    (list || []).forEach(item => {
-      if (!item || !item.toolName) {
-        return;
-      }
-      addTool(item.toolName, item.configuration || {});
-      // apply state; for `active` pass bindings if present
-      if (setter === setToolActive) {
-        setter(item.toolName, item.bindings || []);
-      } else {
-        setter(item.toolName, item.configuration);
-      }
-    });
-  };
-
-  registerCategory(tools.active, setToolActive);
-  registerCategory(tools.passive, setToolPassive);
-  registerCategory(tools.enabled, setToolEnabled);
-  registerCategory(tools.disabled, setToolDisabled);
-
-  // Ensure toolbar service evaluates with the group id (some evaluators expect the id)
-  try {
-    toolbarService?.refreshToolbarState?.({ toolGroup: tg.id ?? toolGroupId, viewportId: null });
-  } catch (e) {
-    console.debug('refreshToolbarState fallback failed', e);
-  }
-
-  // Safe instrumentation for debugging the internals:
-let instanceKeys: string[] = [];
-if (tg) {
-  if (tg._toolInstances instanceof Map) {
-    instanceKeys = Array.from(tg._toolInstances.keys());
-  } else if (tg._toolInstances && typeof tg._toolInstances === 'object') {
-    instanceKeys = Object.keys(tg._toolInstances);
-  } else if (tg.toolInstances instanceof Map) {
-    instanceKeys = Array.from(tg.toolInstances.keys());
-  } else if (tg.toolInstances && typeof tg.toolInstances === 'object') {
-    instanceKeys = Object.keys(tg.toolInstances);
-  }
-}
-
-if (tg?.setToolActive) {
-  tg.setToolActive('WindowLevel', { bindings: [{ mouseButton: 1 }] });
-} else if (toolGroupService?.setToolActive) {
-  toolGroupService.setToolActive(toolGroupId, 'StackScroll', {
-    bindings: [{ mouseButton: 1 }],
-  });
-}
-
-
-  console.log(`ToolGroup ${toolGroupId} initialized. toolGroup object keys:`, Object.keys(tg));
-  console.log(`ToolGroup ${toolGroupId} _toolInstances:`, instanceKeys);
-}
-
-/*
-function initDefaultToolGroup(extensionManager, toolGroupService, commandsManager, toolGroupId) {
   const utilityModule = extensionManager.getModuleEntry(
     '@ohif/extension-cornerstone.utilityModule.tools'
   );
@@ -201,11 +23,11 @@ function initDefaultToolGroup(extensionManager, toolGroupService, commandsManage
     active: [
       {
         toolName: toolNames.WindowLevel,
-        bindings: [{ mouseButton: Enums.MouseBindings.Primary }],
+        bindings: [{ mouseButton: Enums.MouseBindings.Auxiliary }],
       },
       {
         toolName: toolNames.Pan,
-        bindings: [{ mouseButton: Enums.MouseBindings.Auxiliary }],
+        bindings: [{ mouseButton: Enums.MouseBindings.Primary }],
       },
       {
         toolName: toolNames.Zoom,
@@ -284,8 +106,6 @@ function initDefaultToolGroup(extensionManager, toolGroupService, commandsManage
 
   toolGroupService.createToolGroupAndAddTools(toolGroupId, tools);
 }
-
-*/
 
 function initSRToolGroup(extensionManager, toolGroupService) {
   const SRUtilityModule = extensionManager.getModuleEntry(
