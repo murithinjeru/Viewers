@@ -93,13 +93,16 @@ function modeFactory({ modeConfiguration }) {
       toolbarService.register(toolbarButtons);
       toolbarService.updateSection(toolbarService.sections.primary, [
         'MeasurementTools',
+        'Probe',
         'Zoom',
         'Pan',
-        'TrackballRotate',
+        'StackScroll',
         'WindowLevel',
-        'Capture',
+        'Reset',
         'Layout',
         'Crosshairs',
+        'ReferenceLines',
+        'invert',
         'MoreTools',
       ]);
 
@@ -132,6 +135,8 @@ function modeFactory({ modeConfiguration }) {
 
       toolbarService.updateSection('MeasurementTools', [
         'Length',
+        'Angle',
+        'CobbAngle',
         'Bidirectional',
         'ArrowAnnotate',
         'EllipticalROI',
@@ -143,18 +148,13 @@ function modeFactory({ modeConfiguration }) {
       ]);
 
       toolbarService.updateSection('MoreTools', [
-        'Reset',
+        'Capture',
         'rotate-right',
         'flipHorizontal',
         'ImageSliceSync',
-        'ReferenceLines',
         'ImageOverlayViewer',
-        'StackScroll',
-        'invert',
-        'Probe',
+        'TrackballRotate',
         'Cine',
-        'Angle',
-        'CobbAngle',
         'Magnify',
         'CalibrationLine',
         'TagBrowser',
@@ -242,22 +242,57 @@ function modeFactory({ modeConfiguration }) {
           //defaultViewerRouteInit
         },*/
         layoutTemplate: () => {
+          const isMobile = window.innerWidth < 768;
+
+          if (isMobile) {
+            return {
+              id: ohif.layout,
+              props: {
+                // Only viewport visible
+                leftPanels: [],
+                leftPanelResizable: false,
+                leftPanelInitialExpandedWidth: 60,
+                leftPanelMinimumExpandedWidth: 60,
+                rightPanels: [tracked.thumbnailList, tracked.measurements],
+                rightPanelResizable: false,
+                rightPanelInitialExpandedWidth: 150,
+                rightPanelMinimumExpandedWidth: 150,
+                leftPanelClosed: false,
+                rightPanelClosed: false,
+                viewports: [
+                  {
+                    namespace: '@ohif/extension-cornerstone.viewportModule.cornerstone',
+                    displaySetsToDisplay: [ohif.sopClassHandler],
+                  },
+                ],
+              },
+            };
+          }
+
+          // Desktop layout
+
           return {
             id: ohif.layout,
             props: {
-              leftPanels: [tracked.thumbnailList],
-              leftPanelResizable: true,
-              rightPanels: [cornerstone.segmentation, tracked.measurements],
-              rightPanelClosed: true,
+              leftPanels: [],
+              leftPanelResizable: false,
+              leftPanelInitialExpandedWidth: 60,
+              leftPanelMinimumExpandedWidth: 60,
+              rightPanels: [tracked.thumbnailList, tracked.measurements],
               rightPanelResizable: true,
+              rightPanelInitialExpandedWidth: 150,
+              rightPanelMinimumExpandedWidth: 150,
+              leftPanelClosed: false,
+              rightPanelClosed: false,
               viewports: [
                 {
-                  namespace: tracked.viewport,
+                  namespace: '@ohif/extension-cornerstone.viewportModule.cornerstone',
                   displaySetsToDisplay: [
                     ohif.sopClassHandler,
                     dicomvideo.sopClassHandler,
                     ohif.wsiSopClassHandler,
                   ],
+                  toolGroupId: 'default', // <- essential
                 },
                 {
                   namespace: dicomsr.viewport,

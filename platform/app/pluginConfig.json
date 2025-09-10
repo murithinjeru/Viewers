@@ -69,7 +69,8 @@
   ],
   "modes": [
     {
-      "packageName": "@ohif/mode-longitudinal"
+      "packageName": "@ohif/mode-longitudinal",
+      "default": true
     },
     {
       "packageName": "@ohif/mode-segmentation"
