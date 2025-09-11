@@ -225,4 +225,22 @@ window.config = {
     console.warn('test, navigate to https://ohif.org/');
   },
   hotkeys: [],
+
+  whiteLabeling: {
+    createLogoComponentFn: function (React) {
+      return React.createElement(
+        'a',
+        {
+          target: '_self',
+          rel: 'noopener noreferrer',
+          className: 'text-purple-600 line-through',
+          href: '/',
+        },
+        React.createElement('img', {
+          src: './Radsys.png',
+          className: 'w-8 h-8 object-contain',
+        })
+      );
+    },
+  },
 };
