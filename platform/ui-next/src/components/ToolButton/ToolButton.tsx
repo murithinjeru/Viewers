@@ -47,7 +47,7 @@ interface ToolButtonProps {
   icon?: string;
   label?: string;
   tooltip?: string;
-  size?: 'default' | 'small';
+  size?: 'tiny';
   isActive?: boolean;
   disabled?: boolean;
   disabledText?: string;
@@ -63,10 +63,10 @@ function ToolButton(props: ToolButtonProps) {
     icon = 'MissingIcon',
     label,
     tooltip,
-    size = 'default',
+    size = 'tiny',
     disabled = false,
     isActive = false,
-    disabledText,
+    disabledText = true,
     commands,
     onInteraction,
     className,
@@ -121,11 +121,14 @@ function ToolButton(props: ToolButtonProps) {
                   name={icon}
                   className={iconClassName || iconSizeClass}
                 />
-                {label && (
-                  <span className="ml-1 hidden max-w-[5rem] truncate text-xs sm:inline">
-                    {label}
-                  </span>
-                )}
+                {/* remove this block to hide labels globally */}
+                {/*
+{label && (
+  <span className="ml-1 hidden max-w-[5rem] truncate text-xs sm:inline">
+    {label}
+  </span>
+)}
+*/}
               </div>
             )}
           </Button>

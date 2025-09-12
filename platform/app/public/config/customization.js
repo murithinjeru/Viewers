@@ -229,12 +229,9 @@ window.config = {
   whiteLabeling: {
     createLogoComponentFn: function (React) {
       return React.createElement(
-        'a',
+        'div', // changed from 'a' to 'div'
         {
-          target: '_self',
-          rel: 'noopener noreferrer',
-          className: 'text-purple-600 line-through',
-          href: '/',
+          className: 'text-purple-600 line-through cursor-default select-none',
         },
         React.createElement('img', {
           src: './Radsys.png',
