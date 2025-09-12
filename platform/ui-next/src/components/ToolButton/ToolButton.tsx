@@ -13,6 +13,22 @@ const disabledClasses =
 
 const sizeClasses = {
   default: {
+    buttonSizeClass: 'w-10 h-10 md:w-9 md:h-9 sm:w-8 sm:h-8',
+    iconSizeClass: 'w-7 h-7 md:w-6 md:h-6 sm:w-5 sm:h-5',
+  },
+  small: {
+    buttonSizeClass: 'w-8 h-8 sm:w-7 sm:h-7',
+    iconSizeClass: 'w-6 h-6 sm:w-5 sm:h-5',
+  },
+  tiny: {
+    buttonSizeClass: 'w-6 h-6 sm:w-5 sm:h-5',
+    iconSizeClass: 'w-4 h-4 sm:w-3.5 sm:h-3.5',
+  },
+};
+
+/*
+const sizeClasses = {
+  default: {
     buttonSizeClass: 'w-10 h-10',
     iconSizeClass: 'h-7 w-7',
   },
@@ -25,7 +41,7 @@ const sizeClasses = {
     iconSizeClass: 'h-4 w-4',
   },
 };
-
+*/
 interface ToolButtonProps {
   id: string;
   icon?: string;
@@ -100,10 +116,17 @@ function ToolButton(props: ToolButtonProps) {
             name={id}
           >
             {children || (
-              <Icons.ByName
-                name={icon}
-                className={iconClassName || iconSizeClass}
-              />
+              <div className="flex items-center">
+                <Icons.ByName
+                  name={icon}
+                  className={iconClassName || iconSizeClass}
+                />
+                {label && (
+                  <span className="ml-1 hidden max-w-[5rem] truncate text-xs sm:inline">
+                    {label}
+                  </span>
+                )}
+              </div>
             )}
           </Button>
         </span>

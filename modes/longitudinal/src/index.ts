@@ -148,10 +148,10 @@ function modeFactory({ modeConfiguration }) {
       ]);
 
       toolbarService.updateSection('MoreTools', [
+        'ImageSliceSync',
         'Capture',
         'rotate-right',
         'flipHorizontal',
-        'ImageSliceSync',
         'ImageOverlayViewer',
         'TrackballRotate',
         'Cine',

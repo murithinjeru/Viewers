@@ -1,4 +1,13 @@
+html,
 body {
+  height: 100%;
   overscroll-behavior: none;
   touch-action: none;
+  margin: 0;
+  padding: 0;
+}
+#root {
+  height: 100%;
+  margin: 0;
+  padding: 0;
 }

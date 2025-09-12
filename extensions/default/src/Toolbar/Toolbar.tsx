@@ -5,9 +5,15 @@ interface ToolbarProps {
   buttonSection?: string;
   viewportId?: string;
   location?: number;
+  orientation?: 'horizontal' | 'vertical';
 }
 
-export function Toolbar({ buttonSection = 'primary', viewportId, location }: ToolbarProps) {
+export function Toolbar({
+  buttonSection = 'primary',
+  viewportId,
+  location,
+  orientation = 'horizontal',
+}: ToolbarProps) {
   const {
     toolbarButtons,
     onInteraction,
@@ -25,15 +31,17 @@ export function Toolbar({ buttonSection = 'primary', viewportId, location }: Too
   }
 
   return (
-    <>
-      {toolbarButtons?.map(toolDef => {
-        if (!toolDef) {
-          return null;
-        }
-
+    <div
+      className={`flex ${
+        orientation === 'vertical'
+          ? 'flex-col items-center gap-2'
+          : 'flex-row flex-wrap items-center gap-1'
+      }`}
+    >
+      {toolbarButtons.map(toolDef => {
+        if (!toolDef) return null;
         const { id, Component, componentProps } = toolDef;
 
-        // Enhanced props with state and actions - respecting viewport specificity
         const enhancedProps = {
           ...componentProps,
           isOpen: isItemOpen(id, viewportId),
@@ -44,24 +52,16 @@ export function Toolbar({ buttonSection = 'primary', viewportId, location }: Too
           viewportId,
         };
 
-        const tool = (
+        return (
           <Component
             key={id}
             id={id}
             location={location}
-            onInteraction={args => {
-              onInteraction({
-                ...args,
-                itemId: id,
-                viewportId,
-              });
-            }}
+            onInteraction={args => onInteraction({ ...args, itemId: id, viewportId })}
             {...enhancedProps}
           />
         );
-
-        return <div key={id}>{tool}</div>;
       })}
-    </>
+    </div>
   );
 }

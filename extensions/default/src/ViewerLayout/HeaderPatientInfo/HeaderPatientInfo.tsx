@@ -40,7 +40,7 @@ function HeaderPatientInfo({ servicesManager, appConfig }: withAppTypes) {
 
   return (
     <div
-      className="hover:bg-primary-dark flex cursor-pointer items-center justify-center gap-1 rounded-lg"
+      className="hover:bg-primary-dark flex flex-col items-center justify-center gap-1 rounded-lg"
       onClick={handleOnClick}
     >
       {isMixedPatients ? (
@@ -48,24 +48,22 @@ function HeaderPatientInfo({ servicesManager, appConfig }: withAppTypes) {
       ) : (
         <Icons.Patient className="text-primary" />
       )}
-      <div className="flex flex-col justify-center">
-        {expanded ? (
-          <>
-            <div className="self-start text-[13px] font-bold text-white">
-              {formattedPatientName}
-            </div>
-            <div className="text-aqua-pale flex gap-2 text-[11px]">
-              <div>{formattedPatientID}</div>
-              <div>{patientInfo.PatientSex}</div>
-              <div>{patientInfo.PatientDOB}</div>
-            </div>
-          </>
-        ) : (
-          <div className="text-primary self-center text-[13px]">
-            {isMixedPatients ? 'Multiple Patients' : 'Patient'}
+
+      {expanded ? (
+        <>
+          <div className="text-[13px] font-bold text-white">{formattedPatientName}</div>
+          <div className="text-aqua-pale flex flex-col gap-1 text-[11px]">
+            <div>{formattedPatientID}</div>
+            <div>{patientInfo.PatientSex}</div>
+            <div>{patientInfo.PatientDOB}</div>
           </div>
-        )}
-      </div>
+        </>
+      ) : (
+        <div className="text-primary text-[13px]">
+          {isMixedPatients ? 'Multiple Patients' : 'Patient'}
+        </div>
+      )}
+
       <Icons.ArrowLeft className={`text-primary ${expanded ? 'rotate-180' : ''}`} />
     </div>
   );

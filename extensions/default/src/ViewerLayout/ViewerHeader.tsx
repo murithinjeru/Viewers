@@ -82,47 +82,70 @@ function ViewerHeader({ appConfig }: withAppTypes<{ appConfig: AppTypes.Config }
   }
 
   return (
-    <Header
-      menuOptions={menuOptions}
-      isReturnEnabled={!!appConfig.showStudyList}
-      onClickReturnButton={onClickReturnButton}
-      WhiteLabeling={appConfig.whiteLabeling}
-      Secondary={<Toolbar buttonSection="secondary" />}
-      PatientInfo={
-        appConfig.showPatientInfo !== PatientInfoVisibility.DISABLED && (
-          <HeaderPatientInfo
-            servicesManager={servicesManager}
-            appConfig={appConfig}
-          />
-        )
-      }
-      UndoRedo={
-        <div className="text-primary flex cursor-pointer items-center">
-          <Button
-            variant="ghost"
-            className="hover:bg-primary-dark"
-            onClick={() => {
-              commandsManager.run('undo');
-            }}
+    <div className="flex h-screen w-16 flex-col bg-black">
+      <Header
+        className="flex min-h-0 flex-1 flex-col items-center justify-between pt-0"
+        style={{ height: '100%' }} // force 100%
+        menuOptions={menuOptions}
+        //isReturnEnabled={!!appConfig.showStudyList}
+        //onClickReturnButton={onClickReturnButton}
+        WhiteLabeling={appConfig.whiteLabeling}
+      >
+        {/* Full height flex container INSIDE header */}
+        <div
+          className="flex min-h-0 flex-1 flex-col justify-between"
+          style={{ paddingTop: '800px' }}
+        >
+          {/* 🔹 Top */}
+          <div className="flex min-h-0 flex-1 flex-col items-end gap-2">
+            {appConfig.showPatientInfo !== PatientInfoVisibility.VISIBLE && (
+              <div className="w-full max-w-[500px] overflow-visible sm:max-w-[500px]">
+                <HeaderPatientInfo
+                  servicesManager={servicesManager}
+                  appConfig={appConfig}
+                />
+              </div>
+            )}
+          </div>
+
+          {/* 🔹 Middle */}
+          <div
+            className="flex min-h-0 flex-1 flex-col items-center gap-2 overflow-y-auto"
+            style={{ paddingTop: '0px' }}
           >
-            <Icons.Undo className="" />
-          </Button>
-          <Button
-            variant="ghost"
-            className="hover:bg-primary-dark"
-            onClick={() => {
-              commandsManager.run('redo');
-            }}
+            <Toolbar
+              buttonSection="primary"
+              orientation="vertical"
+            />
+            <Toolbar
+              buttonSection="secondary"
+              orientation="vertical"
+            />
+          </div>
+
+          {/* 🔹 Bottom */}
+          <div
+            className="flex flex-col items-center gap-2"
+            style={{ paddingTop: '30px' }}
           >
-            <Icons.Redo className="" />
-          </Button>
+            <Button
+              variant="ghost"
+              className="hover:bg-primary-dark"
+              onClick={() => commandsManager.run('undo')}
+            >
+              <Icons.Undo />
+            </Button>
+            <Button
+              variant="ghost"
+              className="hover:bg-primary-dark"
+              onClick={() => commandsManager.run('redo')}
+            >
+              <Icons.Redo />
+            </Button>
+          </div>
         </div>
-      }
-    >
-      <div className="relative flex justify-center gap-[4px]">
-        <Toolbar buttonSection="primary" />
-      </div>
-    </Header>
+      </Header>
+    </div>
   );
 }
 

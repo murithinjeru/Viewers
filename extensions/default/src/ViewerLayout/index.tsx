@@ -150,73 +150,78 @@ function ViewerLayout({
   const viewportComponents = viewports.map(getViewportComponentData);
 
   return (
-    <div>
-      <ViewerHeader
-        hotkeysManager={hotkeysManager}
-        extensionManager={extensionManager}
-        servicesManager={servicesManager}
-        appConfig={appConfig}
-      />
-      <div
-        className="relative flex w-full flex-row flex-nowrap items-stretch overflow-hidden bg-black"
-        style={{ height: 'calc(100vh - 52px' }}
-      >
-        <React.Fragment>
-          {showLoadingIndicator && <LoadingIndicatorProgress className="h-full w-full bg-black" />}
-          <ResizablePanelGroup {...resizablePanelGroupProps}>
-            {/* LEFT SIDEPANELS */}
-            {hasLeftPanels ? (
-              <>
-                <ResizablePanel {...resizableLeftPanelProps}>
-                  <SidePanelWithServices
-                    side="left"
-                    isExpanded={!leftPanelClosedState}
-                    servicesManager={servicesManager}
-                    {...leftPanelProps}
-                  />
-                </ResizablePanel>
-                <ResizableHandle
-                  onDragging={onHandleDragging}
-                  disabled={!leftPanelResizable}
-                  className={resizableHandleClassName}
-                />
-              </>
-            ) : null}
-            {/* TOOLBAR + GRID */}
-            <ResizablePanel {...resizableViewportGridPanelProps}>
-              <div className="flex h-full flex-1 flex-col">
-                <div
-                  className="relative flex h-full flex-1 items-center justify-center overflow-hidden bg-black"
-                  onMouseEnter={handleMouseEnter}
-                >
-                  <ViewportGridComp
-                    servicesManager={servicesManager}
-                    viewportComponents={viewportComponents}
-                    commandsManager={commandsManager}
-                  />
-                </div>
-              </div>
-            </ResizablePanel>
-            {hasRightPanels ? (
-              <>
-                <ResizableHandle
-                  onDragging={onHandleDragging}
-                  disabled={!rightPanelResizable}
-                  className={resizableHandleClassName}
-                />
-                <ResizablePanel {...resizableRightPanelProps}>
-                  <SidePanelWithServices
-                    side="right"
-                    isExpanded={!rightPanelClosedState}
-                    servicesManager={servicesManager}
-                    {...rightPanelProps}
-                  />
-                </ResizablePanel>
-              </>
-            ) : null}
-          </ResizablePanelGroup>
-        </React.Fragment>
+    <div className="flex h-screen w-full flex-row overflow-hidden bg-black">
+      {/* LEFT HEADER COLUMN */}
+      <div className="flex w-16 flex-col border-r border-gray-800 md:w-20">
+        <ViewerHeader
+          hotkeysManager={hotkeysManager}
+          extensionManager={extensionManager}
+          servicesManager={servicesManager}
+          appConfig={appConfig}
+        />
       </div>
+
+      {/* MAIN CONTENT AREA */}
+      <div className="flex-1">
+        {showLoadingIndicator && <LoadingIndicatorProgress className="h-full w-full bg-black" />}
+
+        <ResizablePanelGroup {...resizablePanelGroupProps}>
+          {/* left panels */}
+          {hasLeftPanels && (
+            <>
+              <ResizablePanel {...resizableLeftPanelProps}>
+                <SidePanelWithServices
+                  side="left"
+                  isExpanded={!leftPanelClosedState}
+                  servicesManager={servicesManager}
+                  {...leftPanelProps}
+                />
+              </ResizablePanel>
+              <ResizableHandle
+                onDragging={onHandleDragging}
+                disabled={!leftPanelResizable}
+                className={resizableHandleClassName}
+              />
+            </>
+          )}
+
+          {/* viewport grid */}
+          <ResizablePanel {...resizableViewportGridPanelProps}>
+            <div className="flex h-full flex-1 flex-col">
+              <div
+                className="relative flex h-full flex-1 items-center justify-center overflow-hidden bg-black"
+                onMouseEnter={handleMouseEnter}
+              >
+                <ViewportGridComp
+                  servicesManager={servicesManager}
+                  viewportComponents={viewportComponents}
+                  commandsManager={commandsManager}
+                />
+              </div>
+            </div>
+          </ResizablePanel>
+
+          {/* right panels */}
+          {hasRightPanels && (
+            <>
+              <ResizableHandle
+                onDragging={onHandleDragging}
+                disabled={!rightPanelResizable}
+                className={resizableHandleClassName}
+              />
+              <ResizablePanel {...resizableRightPanelProps}>
+                <SidePanelWithServices
+                  side="right"
+                  isExpanded={!rightPanelClosedState}
+                  servicesManager={servicesManager}
+                  {...rightPanelProps}
+                />
+              </ResizablePanel>
+            </>
+          )}
+        </ResizablePanelGroup>
+      </div>
+
       <Onboarding tours={customizationService.getCustomization('ohif.tours')} />
       <InvestigationalUseDialog dialogConfiguration={appConfig?.investigationalUseDialog} />
     </div>
