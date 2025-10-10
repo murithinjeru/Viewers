@@ -49,21 +49,37 @@ RUN apt-get update && apt-get install -y build-essential python3
 
 RUN mkdir /usr/src/app
 WORKDIR /usr/src/app
-RUN npm install -g bun
-RUN npm install -g lerna@7.4.2
-ENV PATH=/usr/src/app/node_modules/.bin:$PATH
+
+# enable corepack and pin yarn classic
+RUN corepack enable && corepack prepare yarn@1.22.22 --activate
+
+#RUN npm install -g bun
+#RUN npm install -g lerna@7.4.2
+#ENV PATH=/usr/src/app/node_modules/.bin:$PATH
 
 # Do an initial install and then a final install
 COPY package.json yarn.lock preinstall.js lerna.json ./
 COPY --parents ./addOns/package.json ./addOns/*/*/package.json ./extensions/*/package.json ./modes/*/package.json ./platform/*/package.json ./
 # Run the install before copying the rest of the files
 
-RUN bun pm cache rm
-RUN bun install
+# install
+RUN yarn install --frozen-lockfile
+
+
+
+#RUN bun pm cache rm
+#RUN bun install
 # Copy the local directory
 COPY --link --exclude=yarn.lock --exclude=package.json --exclude=Dockerfile . .
 
 # Build here
+
+# Help Node/webpack with memory pressure
+ENV NODE_OPTIONS="--max-old-space-size=8192"
+
+# build
+RUN npx lerna run build:viewer --stream --concurrency 1
+
 # After install it should hopefully be stable until the local directory changes
 ENV QUICK_BUILD true
 # ENV GENERATE_SOURCEMAP=false
@@ -71,8 +87,8 @@ ARG APP_CONFIG=config/default.js
 ARG PUBLIC_URL=/
 ENV PUBLIC_URL=${PUBLIC_URL}
 
-RUN bun run show:config
-RUN bun run build
+#RUN bun run show:config
+#RUN bun run build
 
 # Precompress files
 RUN chmod u+x .docker/compressDist.sh
