@@ -51,11 +51,11 @@ RUN mkdir /usr/src/app
 WORKDIR /usr/src/app
 
 # enable corepack and pin yarn classic
-RUN corepack enable && corepack prepare yarn@1.22.22 --activate
+# RUN corepack enable && corepack prepare yarn@1.22.22 --activate
 
-#RUN npm install -g bun
-#RUN npm install -g lerna@7.4.2
-#ENV PATH=/usr/src/app/node_modules/.bin:$PATH
+RUN npm install -g bun
+RUN npm install -g lerna@7.4.2
+ENV PATH=/usr/src/app/node_modules/.bin:$PATH
 
 # Do an initial install and then a final install
 COPY package.json yarn.lock preinstall.js lerna.json ./
@@ -65,27 +65,30 @@ COPY --parents ./addOns/package.json ./addOns/*/*/package.json ./extensions/*/pa
 # install
 RUN yarn install --frozen-lockfile
 
-
-
-#RUN bun pm cache rm
-#RUN bun install
+# RUN bun pm cache rm
+# RUN bun install
 # Copy the local directory
 COPY --link --exclude=yarn.lock --exclude=package.json --exclude=Dockerfile . .
 
 # Build here
 
 # Help Node/webpack with memory pressure
-ENV NODE_OPTIONS="--max-old-space-size=8192"
+# ENV NODE_OPTIONS="--max-old-space-size=8192"
 
 # build
-RUN npx lerna run build:viewer --stream --concurrency 1
+# RUN npx lerna run build:viewer --stream --concurrency 1
 
 # After install it should hopefully be stable until the local directory changes
 ENV QUICK_BUILD true
 # ENV GENERATE_SOURCEMAP=false
-ARG APP_CONFIG=config/default.js
+ARG APP_CONFIG=config/docker-nginx-orthanc.js
 ARG PUBLIC_URL=/
 ENV PUBLIC_URL=${PUBLIC_URL}
+
+RUN yarn install --frozen-lockfile --network-timeout 100000
+
+RUN yarn run show:config
+RUN yarn run build
 
 #RUN bun run show:config
 #RUN bun run build
@@ -105,6 +108,8 @@ ENV PORT=${PORT}
 RUN rm /etc/nginx/conf.d/default.conf
 USER nginx
 COPY --chown=nginx:nginx .docker/Viewer-v3.x /usr/src
+# Copy the default.js config from the builder stage as requested
+COPY --from=builder /usr/src/app/platform/app/dist/app-config.js /usr/src/app-config.js
 RUN chmod 777 /usr/src/entrypoint.sh
 COPY --from=builder /usr/src/app/platform/app/dist /usr/share/nginx/html${PUBLIC_URL}
 # Copy paths that are renamed/redirected generally
@@ -114,7 +119,7 @@ COPY --from=builder /usr/src/app/platform/app/dist/dicom-microscopy-viewer /usr/
 # In entrypoint.sh, app-config.js might be overwritten, so chmod it to be writeable.
 # The nginx user cannot chmod it, so change to root.
 USER root
-RUN chown -R nginx:nginx /usr/share/nginx/html && chmod -R 666 /usr/share/nginx/html
+RUN chown -R nginx:nginx /usr/share/nginx/html && chmod -R 755 /usr/share/nginx/html
 USER nginx
 ENTRYPOINT ["/usr/src/entrypoint.sh"]
 CMD ["nginx", "-g", "daemon off;"]
