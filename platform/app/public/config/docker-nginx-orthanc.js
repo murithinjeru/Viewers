@@ -1,9 +1,9 @@
 /** @type {AppTypes.Config} */
 window.config = {
-  routerBasename: null,
-  showStudyList: true,
+  routerBasename: '/ohif',
+  showStudyList: false,
   extensions: [],
-  modes: [],
+  modes: ['@ohif/mode-longitudinal'],
   // below flag is for performance reasons, but it might not work for all servers
   showWarningMessageForCrossOrigin: true,
   showCPUFallbackMessage: true,
@@ -52,5 +52,19 @@ window.config = {
   ],
   httpErrorHandler: error => {
     console.warn(`HTTP Error Handler (status: ${error.status})`, error);
+  },
+  whiteLabeling: {
+    createLogoComponentFn: function (React) {
+      return React.createElement(
+        'div', // changed from 'a' to 'div'
+        {
+          className: 'text-purple-600 line-through cursor-default select-none',
+        },
+        React.createElement('img', {
+          src: './Radsys.png',
+          className: 'w-8 h-8 object-contain',
+        })
+      );
+    },
   },
 };

@@ -1,6 +1,6 @@
 /** @type {AppTypes.Config} */
 window.config = {
-  routerBasename: null,
+  routerBasename: '/ohif',
   extensions: [],
   modes: ['@ohif/mode-longitudinal'],
   showStudyList: true,
@@ -13,7 +13,7 @@ window.config = {
 
   // Add some customizations to the default e2e datasource
   customizationService: [
-    '@ohif/extension-default.customizationModule.datasources',
+    //'@ohif/extension-default.customizationModule.datasources',
     '@ohif/extension-default.customizationModule.helloPage',
   ],
 
@@ -31,9 +31,9 @@ window.config = {
         // DO NOT use staticWado for a live DICOMweb server
         staticWado: false,
         // Point to Orthanc dicom-web plugin endpoint (default Orthanc HTTP port = 8042)
-        qidoRoot: 'http://localhost:8043/dicom-web/',
+        qidoRoot: 'http://localhost:8043/dicom-web',
         wadoUriRoot: 'http://localhost:8043/wado',
-        wadoRoot: 'http://localhost:8043/dicom-web/',
+        wadoRoot: 'http://localhost:8043/dicom-web',
         qidoSupportsIncludeField: true,
         supportsReject: true,
         supportsStow: true,
