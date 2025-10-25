@@ -12,9 +12,9 @@ window.config = {
   strictZSpacingForVolumeViewport: true,
   studyPrefetcher: {
     enabled: true,
-    displaySetsCount: 2,
-    maxNumPrefetchRequests: 10,
-    order: 'closest',
+    displaySetsCount: 15, // how many neighbor displaySets to fetch
+    maxNumPrefetchRequests: 15, // concurrency; keep moderate
+    order: 'closest', // 'closest' | 'downward' | 'upward'
   },
   defaultDataSourceName: 'dicomweb',
   dataSources: [

@@ -18,6 +18,12 @@ window.config = {
   strictZSpacingForVolumeViewport: true,
   groupEnabledModesFirst: true,
   allowMultiSelectExport: false,
+  studyPrefetcher: {
+    enabled: true,
+    displaySetsCount: 15, // how many neighbor displaySets to fetch
+    maxNumPrefetchRequests: 15, // concurrency; keep moderate
+    order: 'closest', // 'closest' | 'downward' | 'upward'
+  },
   maxNumRequests: {
     interaction: 100,
     thumbnail: 75,

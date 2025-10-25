@@ -1,5 +1,11 @@
 import { Types } from '@ohif/core';
-import { cache as cs3DCache, Enums, volumeLoader } from '@cornerstonejs/core';
+import {
+  cache as cs3DCache,
+  Enums,
+  volumeLoader,
+  imageLoader, // ⬅️ add
+  requestPoolManager, // ⬅️ optional, for prefetch request type tagging
+} from '@cornerstonejs/core';
 
 import getCornerstoneViewportType from '../../utils/getCornerstoneViewportType';
 import { StackViewportData, VolumeViewportData } from '../../types/CornerstoneCacheService';
@@ -13,6 +19,9 @@ class CornerstoneCacheService {
       return new CornerstoneCacheService(servicesManager);
     },
   };
+
+  // 👇 add a feature flag (can be wired to your app config if desired)
+  private readonly eagerPixelData = true;
 
   stackImageIds: Map<string, string[]> = new Map();
   volumeImageIds: Map<string, string[]> = new Map();
@@ -47,7 +56,6 @@ class CornerstoneCacheService {
     ) {
       viewportData = await this._getVolumeViewportData(dataSource, displaySets, cs3DViewportType);
     } else if (cs3DViewportType === Enums.ViewportType.STACK) {
-      // Everything else looks like a stack
       viewportData = await this._getStackViewportData(
         dataSource,
         displaySets,
@@ -78,12 +86,16 @@ class CornerstoneCacheService {
       const displaySet = displaySetService.getDisplaySetByUID(invalidatedDisplaySetInstanceUID);
       const imageIds = this._getCornerstoneStackImageIds(displaySet, dataSource);
 
-      // remove images from the cache to be able to re-load them
       imageIds.forEach(imageId => {
         if (cs3DCache.getImageLoadObject(imageId)) {
           cs3DCache.removeImageLoadObject(imageId);
         }
       });
+
+      // re-eager-load if enabled
+      if (this.eagerPixelData && imageIds?.length) {
+        await this._eagerlyCacheStack(imageIds);
+      }
 
       return {
         viewportType: Enums.ViewportType.STACK,
@@ -95,26 +107,17 @@ class CornerstoneCacheService {
       };
     }
 
-    // Todo: grab the volume and get the id from the viewport itself
     const volumeId = `${VOLUME_LOADER_SCHEME}:${invalidatedDisplaySetInstanceUID}`;
-
     const volume = cs3DCache.getVolume(volumeId);
 
     if (volume) {
       if (volume.imageIds) {
-        // also for each imageId in the volume, remove the imageId from the cache
-        // since that will hold the old metadata as well
-
         volume.imageIds.forEach(imageId => {
           if (cs3DCache.getImageLoadObject(imageId)) {
             cs3DCache.removeImageLoadObject(imageId, { force: true });
           }
         });
       }
-
-      // this shouldn't be via removeVolumeLoadObject, since that will
-      // remove the texture as well, but here we really just need a remove
-      // from registry so that we load it again
       cs3DCache._volumeCache.delete(volumeId);
       this.volumeImageIds.delete(volumeId);
     }
@@ -138,11 +141,13 @@ class CornerstoneCacheService {
     _initialImageIndex,
     viewportType: Enums.ViewportType
   ): Promise<StackViewportData> {
-    // TODO - handle overlays and secondary display sets, but for now assume
-    // the 1st display set is the one of interest
     const [displaySet] = displaySets;
     if (!displaySet.imageIds) {
       displaySet.imagesIds = this._getCornerstoneStackImageIds(displaySet, dataSource);
+    }
+    // 🔽 optional eager load for "other" viewports using stack semantics
+    if (this.eagerPixelData && displaySet.imageIds?.length) {
+      await this._eagerlyCacheStack(displaySet.imageIds);
     }
     const { imageIds: data, viewportType: dsViewportType } = displaySet;
     return {
@@ -176,7 +181,6 @@ class CornerstoneCacheService {
       }
     }
 
-    // Ensuring the first non-overlay `displaySet` is always the primary one
     const StackViewportData = [];
     for (const displaySet of displaySets) {
       const { displaySetInstanceUID, StudyInstanceUID, isCompositeStack } = displaySet;
@@ -200,9 +204,13 @@ class CornerstoneCacheService {
 
       if (!stackImageIds) {
         stackImageIds = this._getCornerstoneStackImageIds(displaySet, dataSource);
-        // assign imageIds to the displaySet
         displaySet.imageIds = stackImageIds;
         this.stackImageIds.set(displaySet.displaySetInstanceUID, stackImageIds);
+      }
+
+      // ⬇️ eagerly fetch & cache all frames for the stack
+      if (this.eagerPixelData && stackImageIds?.length) {
+        await this._eagerlyCacheStack(stackImageIds);
       }
 
       StackViewportData.push({
@@ -225,20 +233,12 @@ class CornerstoneCacheService {
     displaySets,
     viewportType: Enums.ViewportType
   ): Promise<VolumeViewportData> {
-    // Todo: Check the cache for multiple scenarios to see if we need to
-    // decache the volume data from other viewports or not
-
     const volumeData = [];
 
     for (const displaySet of displaySets) {
       const { Modality } = displaySet;
       const isParametricMap = Modality === 'PMAP';
       const isSeg = Modality === 'SEG';
-
-      // Don't create volumes for the displaySets that have custom load
-      // function (e.g., SEG, RT, since they rely on the reference volumes
-      // and they take care of their own loading after they are created in their
-      // getSOPClassHandler method
 
       if (displaySet.load && displaySet.load instanceof Function) {
         const { userAuthenticationService } = this.servicesManager.services;
@@ -256,15 +256,11 @@ class CornerstoneCacheService {
           console.error(e);
         }
 
-        // Parametric maps have a `load` method but it should not be loaded in the
-        // same way as SEG and RTSTRUCT but like a normal volume
         if (!isParametricMap) {
           volumeData.push({
             studyInstanceUID: displaySet.StudyInstanceUID,
             displaySetInstanceUID: displaySet.displaySetInstanceUID,
           });
-
-          // Todo: do some cache check and empty the cache if needed
           continue;
         }
       }
@@ -274,8 +270,6 @@ class CornerstoneCacheService {
       let volumeImageIds = this.volumeImageIds.get(displaySet.displaySetInstanceUID);
       let volume = cs3DCache.getVolume(volumeId);
 
-      // Parametric maps do not have image ids but they already have volume data
-      // therefore a new volume should not be created.
       if (!isParametricMap && !isSeg && (!volumeImageIds || !volume)) {
         volumeImageIds = this._getCornerstoneVolumeImageIds(displaySet, dataSource);
 
@@ -283,9 +277,12 @@ class CornerstoneCacheService {
           imageIds: volumeImageIds,
         });
 
-        this.volumeImageIds.set(displaySet.displaySetInstanceUID, volumeImageIds);
+        // ⬇️ eagerly stream the full volume (fills the 3D array & caches)
+        if (this.eagerPixelData && volume?.load) {
+          await this._eagerlyLoadVolume(volume);
+        }
 
-        // Add imageIds to the displaySet for volumes
+        this.volumeImageIds.set(displaySet.displaySetInstanceUID, volumeImageIds);
         displaySet.imageIds = volumeImageIds;
       }
 
@@ -313,10 +310,32 @@ class CornerstoneCacheService {
     if (displaySet.imageIds) {
       return displaySet.imageIds;
     }
-
     const stackImageIds = this._getCornerstoneStackImageIds(displaySet, dataSource);
-
     return stackImageIds;
+  }
+
+  // ==== NEW HELPERS =========================================================
+
+  /**
+   * Eagerly loads & caches all images for a stack.
+   * Uses the 'prefetch' request type so it doesn't starve user interactions.
+   */
+  private async _eagerlyCacheStack(imageIds: string[]) {
+    // Cornerstone helper loads & caches a list of imageIds
+    // (returns an array of Promises we can await in parallel)
+    const promises = imageLoader.loadAndCacheImages(imageIds, {
+      // Mark these as prefetch so RequestPool can prioritize user actions
+      requestType: 'prefetch',
+    } as any);
+    await Promise.allSettled(promises);
+  }
+
+  /**
+   * Eagerly loads the full streaming volume.
+   */
+  private async _eagerlyLoadVolume(volume: any) {
+    // StreamingImageVolume implements .load(), which schedules all frame requests.
+    await volume.load();
   }
 }
 

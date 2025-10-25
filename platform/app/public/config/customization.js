@@ -10,7 +10,12 @@ window.config = {
   showCPUFallbackMessage: false,
   strictZSpacingForVolumeViewport: true,
   // filterQueryParam: false,
-
+  studyPrefetcher: {
+    enabled: true,
+    displaySetsCount: 15, // how many neighbor displaySets to fetch
+    maxNumPrefetchRequests: 15, // concurrency; keep moderate
+    order: 'closest', // 'closest' | 'downward' | 'upward'
+  },
   // Add some customizations to the default e2e datasource
   customizationService: [
     //'@ohif/extension-default.customizationModule.datasources',
