@@ -13,23 +13,48 @@ const ThumbnailList = ({
   viewPreset,
   ThumbnailMenuItems,
 }) => {
-  // Use the dynamic height hook on the parent container
   const { ref, maxHeight } = useDynamicMaxHeight(thumbnails);
 
-  // Filter thumbnails into list items and thumbnail items
-  const listItems = thumbnails?.filter(
-    ({ componentType }) => componentType === 'thumbnailNoImage' || viewPreset === 'list'
-  );
+  const listItems =
+    thumbnails?.filter(
+      ({ componentType }) => componentType === 'thumbnailNoImage' || viewPreset === 'list'
+    ) || [];
 
-  const thumbnailItems = thumbnails?.filter(
-    ({ componentType }) => componentType !== 'thumbnailNoImage' && viewPreset === 'thumbnails'
-  );
+  const thumbnailItems =
+    thumbnails?.filter(
+      ({ componentType }) => componentType !== 'thumbnailNoImage' && viewPreset === 'thumbnails'
+    ) || [];
+
+  const renderProgress = (item: any) => {
+    const lp = item?.loadingProgress;
+    if (!lp) return null;
+
+    const hasTotal = lp.total > 0;
+    const done = !!lp.done || (hasTotal && lp.loaded >= lp.total);
+    if (done) return null;
+
+    const pct = hasTotal ? Math.min(100, Math.round((lp.loaded / lp.total) * 100)) : null;
+
+    return (
+      <div className="absolute left-2 right-2 bottom-2 h-1 overflow-hidden rounded bg-white/20">
+        {hasTotal ? (
+          <div
+            className="h-full rounded bg-emerald-400 transition-[width] duration-150 ease-linear"
+            style={{ width: `${pct}%` }}
+          />
+        ) : (
+          <div className="h-full w-1/3 animate-pulse rounded bg-emerald-400" />
+        )}
+      </div>
+    );
+  };
 
   return (
     <div className="flex flex-col">
       <div
         ref={ref}
         className="flex flex-col gap-[2px] pt-[4px] pr-[2.5px] pl-[5px] pb-[4px]"
+        style={maxHeight ? { maxHeight } : undefined}
       >
         {thumbnailItems.length > 0 && (
           <div
@@ -38,27 +63,32 @@ const ThumbnailList = ({
           >
             {thumbnailItems.map(item => {
               const { displaySetInstanceUID, componentType, numInstances, ...rest } = item;
-
               const isActive = activeDisplaySetInstanceUIDs.includes(displaySetInstanceUID);
+
               return (
-                <Thumbnail
+                <div
                   key={displaySetInstanceUID}
-                  {...rest}
-                  displaySetInstanceUID={displaySetInstanceUID}
-                  numInstances={numInstances || 1}
-                  isActive={isActive}
-                  thumbnailType={componentType}
-                  viewPreset="thumbnails"
-                  onClick={onThumbnailClick.bind(null, displaySetInstanceUID)}
-                  onDoubleClick={onThumbnailDoubleClick.bind(null, displaySetInstanceUID)}
-                  onClickUntrack={onClickUntrack.bind(null, displaySetInstanceUID)}
-                  ThumbnailMenuItems={ThumbnailMenuItems}
-                />
+                  className="relative"
+                >
+                  <Thumbnail
+                    {...rest}
+                    displaySetInstanceUID={displaySetInstanceUID}
+                    numInstances={numInstances || 1}
+                    isActive={isActive}
+                    thumbnailType={componentType}
+                    viewPreset="thumbnails"
+                    onClick={onThumbnailClick.bind(null, displaySetInstanceUID)}
+                    onDoubleClick={onThumbnailDoubleClick.bind(null, displaySetInstanceUID)}
+                    onClickUntrack={onClickUntrack.bind(null, displaySetInstanceUID)}
+                    ThumbnailMenuItems={ThumbnailMenuItems}
+                  />
+                  {renderProgress(item)}
+                </div>
               );
             })}
           </div>
         )}
-        {/* List Items */}
+
         {listItems.length > 0 && (
           <div
             id="ohif-thumbnail-list"
@@ -67,20 +97,26 @@ const ThumbnailList = ({
             {listItems.map(item => {
               const { displaySetInstanceUID, componentType, numInstances, ...rest } = item;
               const isActive = activeDisplaySetInstanceUIDs.includes(displaySetInstanceUID);
+
               return (
-                <Thumbnail
+                <div
                   key={displaySetInstanceUID}
-                  {...rest}
-                  displaySetInstanceUID={displaySetInstanceUID}
-                  numInstances={numInstances || 1}
-                  isActive={isActive}
-                  thumbnailType={componentType}
-                  viewPreset="list"
-                  onClick={onThumbnailClick.bind(null, displaySetInstanceUID)}
-                  onDoubleClick={onThumbnailDoubleClick.bind(null, displaySetInstanceUID)}
-                  onClickUntrack={onClickUntrack.bind(null, displaySetInstanceUID)}
-                  ThumbnailMenuItems={ThumbnailMenuItems}
-                />
+                  className="relative"
+                >
+                  <Thumbnail
+                    {...rest}
+                    displaySetInstanceUID={displaySetInstanceUID}
+                    numInstances={numInstances || 1}
+                    isActive={isActive}
+                    thumbnailType={componentType}
+                    viewPreset="list"
+                    onClick={onThumbnailClick.bind(null, displaySetInstanceUID)}
+                    onDoubleClick={onThumbnailDoubleClick.bind(null, displaySetInstanceUID)}
+                    onClickUntrack={onClickUntrack.bind(null, displaySetInstanceUID)}
+                    ThumbnailMenuItems={ThumbnailMenuItems}
+                  />
+                  {renderProgress(item)}
+                </div>
               );
             })}
           </div>
@@ -102,16 +138,14 @@ ThumbnailList.propTypes = {
       description: PropTypes.string,
       componentType: PropTypes.any,
       isTracked: PropTypes.bool,
-      /**
-       * Data the thumbnail should expose to a receiving drop target. Use a matching
-       * `dragData.type` to identify which targets can receive this draggable item.
-       * If this is not set, drag-n-drop will be disabled for this thumbnail.
-       *
-       * Ref: https://react-dnd.github.io/react-dnd/docs/api/use-drag#specification-object-members
-       */
       dragData: PropTypes.shape({
-        /** Must match the "type" a dropTarget expects */
         type: PropTypes.string.isRequired,
+      }),
+      // Optional: your progress object
+      loadingProgress: PropTypes.shape({
+        total: PropTypes.number,
+        loaded: PropTypes.number,
+        done: PropTypes.bool,
       }),
     })
   ),

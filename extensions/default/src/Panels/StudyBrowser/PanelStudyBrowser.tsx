@@ -7,6 +7,7 @@ import { PanelStudyBrowserHeader } from './PanelStudyBrowserHeader';
 import { defaultActionIcons } from './constants';
 import MoreDropdownMenu from '../../Components/MoreDropdownMenu';
 import { CallbackCustomization } from 'platform/core/src/types';
+import { eventTarget, Enums, cache, metaData } from '@cornerstonejs/core';
 
 const { sortStudyInstances, formatDate, createStudyBrowserTabs } = utils;
 
@@ -41,15 +42,24 @@ function PanelStudyBrowser({
   const [hasLoadedViewports, setHasLoadedViewports] = useState(false);
   const [studyDisplayList, setStudyDisplayList] = useState([]);
   const [displaySets, setDisplaySets] = useState([]);
-  const [displaySetsLoadingState, setDisplaySetsLoadingState] = useState({});
-  const [thumbnailImageSrcMap, setThumbnailImageSrcMap] = useState({});
-  const [jumpToDisplaySet, setJumpToDisplaySet] = useState(null);
+
+  // { [displaySetInstanceUID]: { total: number; loaded: number; done?: boolean } }
+  const [displaySetsLoadingState, setDisplaySetsLoadingState] = useState<
+    Record<string, { total: number; loaded: number; done?: boolean }>
+  >({});
+  const [thumbnailImageSrcMap, setThumbnailImageSrcMap] = useState<Record<string, string>>({});
+  const [jumpToDisplaySet, setJumpToDisplaySet] = useState<string | null>(null);
 
   const [viewPresets, setViewPresets] = useState(
     customizationService.getCustomization('studyBrowser.viewPresets')
   );
 
   const [actionIcons, setActionIcons] = useState(defaultActionIcons);
+
+  // OPTIONAL: expose progress to DevTools as __ohifProgress
+  useEffect(() => {
+    (window as any).__ohifProgress = displaySetsLoadingState;
+  }, [displaySetsLoadingState]);
 
   // multiple can be true or false
   const updateActionIconValue = actionIcon => {
@@ -99,6 +109,8 @@ function PanelStudyBrowser({
       servicesManager,
       isHangingProtocolLayout,
       customizationService,
+      extensionManager,
+      onDoubleClickThumbnailHandlerCallBack,
     ]
   );
 
@@ -184,7 +196,7 @@ function PanelStudyBrowser({
     }
 
     currentDisplaySets.forEach(async dSet => {
-      const newImageSrcEntry = {};
+      const newImageSrcEntry: Record<string, string> = {};
       const displaySet = displaySetService.getDisplaySetByUID(dSet.displaySetInstanceUID);
       const imageIds = dataSource.getImageIdsForDisplaySet(dSet);
 
@@ -195,13 +207,14 @@ function PanelStudyBrowser({
         return;
       }
       // When the image arrives, render it and store the result in the thumbnailImgSrcMap
-      let { thumbnailSrc } = displaySet;
-      if (!thumbnailSrc && displaySet.getThumbnailSrc) {
-        thumbnailSrc = await displaySet.getThumbnailSrc({ getImageSrc });
+      let { thumbnailSrc } = displaySet as any;
+      if (!thumbnailSrc && (displaySet as any).getThumbnailSrc) {
+        thumbnailSrc = await (displaySet as any).getThumbnailSrc({ getImageSrc });
       }
       if (!thumbnailSrc && imageId) {
-        const thumbnailSrc = await getImageSrc(imageId);
-        displaySet.thumbnailSrc = thumbnailSrc;
+        const tSrc = await getImageSrc(imageId);
+        (displaySet as any).thumbnailSrc = tSrc;
+        thumbnailSrc = tSrc;
       }
       newImageSrcEntry[dSet.displaySetInstanceUID] = thumbnailSrc;
 
@@ -211,7 +224,7 @@ function PanelStudyBrowser({
     });
   }, [displaySetService, dataSource, getImageSrc, activeViewportId, hasLoadedViewports]);
 
-  // ~~ displaySets
+  // ~~ displaySets (map + render data)
   useEffect(() => {
     const currentDisplaySets = displaySetService.activeDisplaySets;
 
@@ -239,7 +252,7 @@ function PanelStudyBrowser({
     customMapDisplaySets,
   ]);
 
-  // ~~ subscriptions --> displaySets
+  // ~~ subscriptions --> displaySets (thumbnails for newly added sets)
   useEffect(() => {
     // DISPLAY_SETS_ADDED returns an array of DisplaySets that were added
     const SubscriptionDisplaySetsAdded = displaySetService.subscribe(
@@ -251,7 +264,7 @@ function PanelStudyBrowser({
         const { displaySetsAdded, options } = data;
         displaySetsAdded.forEach(async dSet => {
           const displaySetInstanceUID = dSet.displaySetInstanceUID;
-          const newImageSrcEntry = {};
+          const newImageSrcEntry: Record<string, string> = {};
           const displaySet = displaySetService.getDisplaySetByUID(displaySetInstanceUID);
           if (displaySet?.unsupported) {
             return;
@@ -269,13 +282,13 @@ function PanelStudyBrowser({
           }
 
           // When the image arrives, render it and store the result in the thumbnailImgSrcMap
-          let { thumbnailSrc } = displaySet;
-          if (!thumbnailSrc && displaySet.getThumbnailSrc) {
-            thumbnailSrc = await displaySet.getThumbnailSrc({ getImageSrc });
+          let { thumbnailSrc } = displaySet as any;
+          if (!thumbnailSrc && (displaySet as any).getThumbnailSrc) {
+            thumbnailSrc = await (displaySet as any).getThumbnailSrc({ getImageSrc });
           }
           if (!thumbnailSrc) {
             thumbnailSrc = await getImageSrc(imageId);
-            displaySet.thumbnailSrc = thumbnailSrc;
+            (displaySet as any).thumbnailSrc = thumbnailSrc;
           }
           newImageSrcEntry[displaySetInstanceUID] = thumbnailSrc;
 
@@ -291,9 +304,8 @@ function PanelStudyBrowser({
     };
   }, [displaySetService, dataSource, getImageSrc, hasLoadedViewports]);
 
+  // ~~ other displaySetService subscriptions (remap on change/metadata invalidation)
   useEffect(() => {
-    // TODO: Will this always hold _all_ the displaySets we care about?
-    // DISPLAY_SETS_CHANGED returns `DisplaySerService.activeDisplaySets`
     const SubscriptionDisplaySetsChanged = displaySetService.subscribe(
       displaySetService.EVENTS.DISPLAY_SETS_CHANGED,
       changedDisplaySets => {
@@ -342,9 +354,11 @@ function PanelStudyBrowser({
     customMapDisplaySets,
   ]);
 
-  const tabs = createStudyBrowserTabs(StudyInstanceUIDs, studyDisplayList, displaySets);
+  //const tabs = createStudyBrowserTabs(StudyInstanceUIDs, studyDisplayList, displaySets);
 
-  // TODO: Should not fire this on "close"
+  const tabs = createTabsWithProgress(StudyInstanceUIDs, studyDisplayList, displaySets);
+
+  // ~~ expand / collapse study (and request display set creation)
   function _handleStudyClick(StudyInstanceUID) {
     const shouldCollapseStudy = expandedStudyInstanceUIDs.includes(StudyInstanceUID);
     const updatedExpandedStudyInstanceUIDs = shouldCollapseStudy
@@ -359,28 +373,26 @@ function PanelStudyBrowser({
     }
   }
 
+  // ~~ ensure we scroll the newly created displaySet into view
   useEffect(() => {
     if (jumpToDisplaySet) {
-      // Get element by displaySetInstanceUID
       const displaySetInstanceUID = jumpToDisplaySet;
       const element = document.getElementById(`thumbnail-${displaySetInstanceUID}`);
 
       if (element && typeof element.scrollIntoView === 'function') {
-        // TODO: Any way to support IE here?
         element.scrollIntoView({ behavior: 'smooth' });
-
         setJumpToDisplaySet(null);
       }
     }
   }, [jumpToDisplaySet, expandedStudyInstanceUIDs, activeTabName]);
 
+  // ~~ ensure the correct tab is active for the displaySet we jump to
   useEffect(() => {
     if (!jumpToDisplaySet) {
       return;
     }
 
     const displaySetInstanceUID = jumpToDisplaySet;
-    // Set the activeTabName and expand the study
     const thumbnailLocation = _findTabAndStudyOfDisplaySet(displaySetInstanceUID, tabs);
     if (!thumbnailLocation) {
       return;
@@ -395,6 +407,170 @@ function PanelStudyBrowser({
   }, [expandedStudyInstanceUIDs, jumpToDisplaySet, tabs]);
 
   const activeDisplaySetInstanceUIDs = viewports.get(activeViewportId)?.displaySetInstanceUIDs;
+
+  // --- Progress helpers/state updaters ---
+  const setProgressTotal = useCallback((uid: string, total: number) => {
+    setDisplaySetsLoadingState(prev => {
+      const curr = prev?.[uid] ?? { total: 0, loaded: 0 };
+      return { ...prev, [uid]: { ...curr, total } };
+    });
+  }, []);
+
+  const incProgress = useCallback((uid: string, delta = 1) => {
+    setDisplaySetsLoadingState(prev => {
+      const curr = prev?.[uid] ?? { total: 0, loaded: 0 };
+      return { ...prev, [uid]: { ...curr, loaded: curr.loaded + delta } };
+    });
+  }, []);
+
+  const setProgressDone = useCallback((uid: string) => {
+    setDisplaySetsLoadingState(prev => {
+      const curr = prev?.[uid] ?? { total: 0, loaded: 0 };
+      const loaded = Math.max(curr.loaded, curr.total || curr.loaded);
+      return { ...prev, [uid]: { ...curr, loaded, done: true } };
+    });
+  }, []);
+
+  // --- Map Cornerstone IDs -> displaySetInstanceUID ---
+  function getUIDFromImageId(imageId: string | undefined) {
+    if (!imageId) return;
+
+    // Primary: generalSeriesModule
+    let seriesUID = metaData.get('generalSeriesModule', imageId)?.seriesInstanceUID;
+
+    // Fallback: raw DICOM tag (SeriesInstanceUID)
+    if (!seriesUID) {
+      const raw = metaData.get('x0020000e', imageId);
+      // raw may be a string or an object { Value: '...' }
+      seriesUID = typeof raw === 'string' ? raw : (raw?.Value ?? raw?.value);
+    }
+
+    if (!seriesUID) return;
+
+    const ds = displaySetService
+      .getActiveDisplaySets()
+      .find(d => d.SeriesInstanceUID === seriesUID);
+    return ds?.displaySetInstanceUID;
+  }
+
+  function getUIDFromVolumeId(volumeId: string | undefined) {
+    if (!volumeId) return;
+    const vol = cache.getVolume(volumeId);
+    const firstImageId = vol?.imageIds?.[0];
+    if (firstImageId) {
+      const seriesUID =
+        metaData.get('generalSeriesModule', firstImageId)?.seriesInstanceUID ??
+        ((): string | undefined => {
+          const raw = metaData.get('x0020000e', firstImageId);
+          return typeof raw === 'string' ? raw : (raw?.Value ?? raw?.value);
+        })();
+      if (seriesUID) {
+        const ds = displaySetService
+          .getActiveDisplaySets()
+          .find(d => d.SeriesInstanceUID === seriesUID);
+        if (ds) return ds.displaySetInstanceUID;
+      }
+    }
+    const byId = displaySetService.getDisplaySetByUID(volumeId);
+    if (byId) return byId.displaySetInstanceUID;
+  }
+
+  // --- Initialize progress records and totals for visible displaySets ---
+  useEffect(() => {
+    const currentDisplaySets = displaySetService.activeDisplaySets;
+    if (!currentDisplaySets.length) return;
+
+    const mappedDisplaySets = mapDisplaySetsWithState(
+      currentDisplaySets,
+      displaySetsLoadingState,
+      thumbnailImageSrcMap,
+      viewports
+    );
+
+    if (!customMapDisplaySets) sortStudyInstances(mappedDisplaySets);
+    setDisplaySets(mappedDisplaySets);
+
+    // Seed indeterminate records so the bar can render immediately
+    for (const ds of mappedDisplaySets) {
+      const uid = ds.displaySetInstanceUID;
+      if (!displaySetsLoadingState[uid]) {
+        setDisplaySetsLoadingState(prev => ({ ...prev, [uid]: { total: 0, loaded: 0 } }));
+      }
+    }
+
+    // Then set a real total if we can
+    for (const ds of mappedDisplaySets) {
+      const displaySet = displaySetService.getDisplaySetByUID(ds.displaySetInstanceUID);
+      let total = 0;
+      if ((displaySet as any)?.numImageFrames) {
+        total = Number((displaySet as any).numImageFrames) || 0;
+      } else {
+        try {
+          total = (dataSource.getImageIdsForDisplaySet(displaySet) || []).length;
+        } catch {
+          total = 0;
+        }
+      }
+      if (total > 0) setProgressTotal(ds.displaySetInstanceUID, total);
+    }
+    // NOTE: intentionally not depending on displaySetsLoadingState to avoid loops
+  }, [
+    displaySetService.activeDisplaySets,
+    viewports,
+    thumbnailImageSrcMap,
+    customMapDisplaySets,
+    dataSource,
+    setProgressTotal,
+  ]);
+
+  // --- Cornerstone3D event subscriptions (progress increments/completion) ---
+  useEffect(() => {
+    const safeImageIdFromEvent = (e: any): string | undefined => {
+      const d = e?.detail ?? {};
+      // Cornerstone3D loaders often put imageId here; older paths only have image
+      return d.imageId ?? d.image?.imageId ?? d.image?.imageId?.toString();
+    };
+
+    const onImageLoaded = (e: any) => {
+      const imageId = safeImageIdFromEvent(e);
+      if (!imageId) return; // <- prevent "Empty imageId" calls
+      const dsUID = getUIDFromImageId(imageId);
+      if (dsUID) {
+        // console.log('[IMAGE_LOADED]', dsUID);
+        incProgress(dsUID, 1);
+      }
+    };
+
+    const onVolMod = (e: any) => {
+      const volumeId: string | undefined = e?.detail?.volumeId;
+      if (!volumeId) return;
+      const dsUID = getUIDFromVolumeId(volumeId);
+      if (dsUID) {
+        // console.log('[IMAGE_VOLUME_MODIFIED]', dsUID);
+        incProgress(dsUID, 1);
+      }
+    };
+
+    const onVolDone = (e: any) => {
+      const volumeId: string | undefined = e?.detail?.volumeId;
+      if (!volumeId) return;
+      const dsUID = getUIDFromVolumeId(volumeId);
+      if (dsUID) {
+        // console.log('[IMAGE_VOLUME_LOADING_COMPLETED]', dsUID);
+        setProgressDone(dsUID);
+      }
+    };
+
+    eventTarget.addEventListener(Enums.Events.IMAGE_LOADED, onImageLoaded);
+    eventTarget.addEventListener(Enums.Events.IMAGE_VOLUME_MODIFIED, onVolMod);
+    eventTarget.addEventListener(Enums.Events.IMAGE_VOLUME_LOADING_COMPLETED, onVolDone);
+
+    return () => {
+      eventTarget.removeEventListener(Enums.Events.IMAGE_LOADED, onImageLoaded);
+      eventTarget.removeEventListener(Enums.Events.IMAGE_VOLUME_MODIFIED, onVolMod);
+      eventTarget.removeEventListener(Enums.Events.IMAGE_VOLUME_LOADING_COMPLETED, onVolDone);
+    };
+  }, [incProgress, setProgressDone]);
 
   return (
     <>
@@ -469,25 +645,41 @@ function _mapDataSourceStudies(studies) {
 function _mapDisplaySets(displaySets, displaySetLoadingState, thumbnailImageSrcMap, viewports) {
   const thumbnailDisplaySets = [];
   const thumbnailNoImageDisplaySets = [];
+
   displaySets
     .filter(ds => !ds.excludeFromThumbnailBrowser)
     .forEach(ds => {
       const { thumbnailSrc, displaySetInstanceUID } = ds;
       const componentType = _getComponentType(ds);
-
       const array =
         componentType === 'thumbnail' ? thumbnailDisplaySets : thumbnailNoImageDisplaySets;
 
-      const loadingProgress = displaySetLoadingState?.[displaySetInstanceUID];
+      const lp = displaySetLoadingState?.[displaySetInstanceUID];
+      const hasTotal = !!lp && lp.total > 0;
+      const isDone = !!lp?.done || (hasTotal && lp.loaded >= lp.total);
+      const pct = hasTotal ? Math.round((lp.loaded / lp.total) * 100) : null;
+      const isLoading = !!lp && !isDone;
+
+      // Always-visible line: inject status into the description text
+      const baseDesc = ds.SeriesDescription || '';
+      const statusSuffix = isLoading
+        ? pct !== null
+          ? ` • ${pct}%`
+          : ' • Loading…'
+        : isDone
+          ? ' • ✓'
+          : '';
 
       array.push({
         displaySetInstanceUID,
-        description: ds.SeriesDescription || '',
+        // 👇 This line guarantees the % shows up in the tile
+        description: `${baseDesc}${statusSuffix}`,
         seriesNumber: ds.SeriesNumber,
         modality: ds.Modality,
         seriesDate: formatDate(ds.SeriesDate),
         numInstances: ds.numImageFrames,
-        loadingProgress,
+        // keep these so you can upgrade to a custom thumbnail later if you want
+        loadingProgress: lp,
         countIcon: ds.countIcon,
         messages: ds.messages,
         StudyInstanceUID: ds.StudyInstanceUID,
@@ -496,7 +688,6 @@ function _mapDisplaySets(displaySets, displaySetLoadingState, thumbnailImageSrcM
         dragData: {
           type: 'displayset',
           displaySetInstanceUID,
-          // .. Any other data to pass
         },
         isHydratedForDerivedDisplaySet: ds.isHydrated,
       });
@@ -519,8 +710,8 @@ function _getComponentType(ds) {
 
 function getImageIdForThumbnail(displaySet, imageIds) {
   let imageId;
-  if (displaySet.isDynamicVolume) {
-    const timePoints = displaySet.dynamicVolumeInfo.timePoints;
+  if ((displaySet as any).isDynamicVolume) {
+    const timePoints = (displaySet as any).dynamicVolumeInfo.timePoints;
     const middleIndex = Math.floor(timePoints.length / 2);
     const middleTimePointImageIds = timePoints[middleIndex];
     imageId = middleTimePointImageIds[Math.floor(middleTimePointImageIds.length / 2)];
@@ -549,4 +740,46 @@ function _findTabAndStudyOfDisplaySet(displaySetInstanceUID, tabs) {
       }
     }
   }
+}
+
+function createTabsWithProgress(
+  primaryStudyUIDs: string[],
+  studyDisplayList: Array<{
+    studyInstanceUid: string;
+    date: string;
+    description: string;
+    modalities: string[];
+    numInstances: number;
+  }>,
+  displaySets: Array<any> // from _mapDisplaySets (includes loadingProgress)
+) {
+  // Build a lookup of studies we want to show (keep original fields)
+  const studyMap = new Map<string, any>();
+  // Seed with visible/primary study UIDs first to preserve order
+  for (const uid of primaryStudyUIDs) {
+    const s = studyDisplayList.find(x => x.studyInstanceUid === uid);
+    if (s) studyMap.set(uid, { ...s, displaySets: [] });
+  }
+  // Then add any other studies we fetched for the patient
+  for (const s of studyDisplayList) {
+    if (!studyMap.has(s.studyInstanceUid)) {
+      studyMap.set(s.studyInstanceUid, { ...s, displaySets: [] });
+    }
+  }
+
+  // Attach display sets, PRESERVING every field (including loadingProgress)
+  for (const ds of displaySets) {
+    const s = studyMap.get(ds.StudyInstanceUID);
+    if (s) {
+      s.displaySets.push(ds);
+    }
+  }
+
+  // Single "all" tab (match the stock util’s shape that StudyBrowser expects)
+  return [
+    {
+      name: 'all',
+      studies: Array.from(studyMap.values()),
+    },
+  ];
 }
