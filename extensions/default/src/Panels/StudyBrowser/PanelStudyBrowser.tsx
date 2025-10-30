@@ -135,16 +135,17 @@ function PanelStudyBrowser({
         throw new Error('Invalid study URL');
       }
 
-      let qidoStudiesForPatient = qidoForStudyUID;
+      const qidoStudiesForPatient = qidoForStudyUID;
 
       // try to fetch the prior studies based on the patientID if the
       // server can respond.
+      /**
       try {
         qidoStudiesForPatient = await getStudiesForPatientByMRN(qidoForStudyUID);
       } catch (error) {
         console.warn(error);
       }
-
+      */
       const mappedStudies = _mapDataSourceStudies(qidoStudiesForPatient);
       const actuallyMappedStudies = mappedStudies.map(qidoStudy => {
         return {
@@ -433,7 +434,9 @@ function PanelStudyBrowser({
 
   // --- Map Cornerstone IDs -> displaySetInstanceUID ---
   function getUIDFromImageId(imageId: string | undefined) {
-    if (!imageId) return;
+    if (!imageId) {
+      return;
+    }
 
     // Primary: generalSeriesModule
     let seriesUID = metaData.get('generalSeriesModule', imageId)?.seriesInstanceUID;
@@ -445,7 +448,9 @@ function PanelStudyBrowser({
       seriesUID = typeof raw === 'string' ? raw : (raw?.Value ?? raw?.value);
     }
 
-    if (!seriesUID) return;
+    if (!seriesUID) {
+      return;
+    }
 
     const ds = displaySetService
       .getActiveDisplaySets()
@@ -454,7 +459,9 @@ function PanelStudyBrowser({
   }
 
   function getUIDFromVolumeId(volumeId: string | undefined) {
-    if (!volumeId) return;
+    if (!volumeId) {
+      return;
+    }
     const vol = cache.getVolume(volumeId);
     const firstImageId = vol?.imageIds?.[0];
     if (firstImageId) {
@@ -468,17 +475,23 @@ function PanelStudyBrowser({
         const ds = displaySetService
           .getActiveDisplaySets()
           .find(d => d.SeriesInstanceUID === seriesUID);
-        if (ds) return ds.displaySetInstanceUID;
+        if (ds) {
+          return ds.displaySetInstanceUID;
+        }
       }
     }
     const byId = displaySetService.getDisplaySetByUID(volumeId);
-    if (byId) return byId.displaySetInstanceUID;
+    if (byId) {
+      return byId.displaySetInstanceUID;
+    }
   }
 
   // --- Initialize progress records and totals for visible displaySets ---
   useEffect(() => {
     const currentDisplaySets = displaySetService.activeDisplaySets;
-    if (!currentDisplaySets.length) return;
+    if (!currentDisplaySets.length) {
+      return;
+    }
 
     const mappedDisplaySets = mapDisplaySetsWithState(
       currentDisplaySets,
@@ -487,7 +500,9 @@ function PanelStudyBrowser({
       viewports
     );
 
-    if (!customMapDisplaySets) sortStudyInstances(mappedDisplaySets);
+    if (!customMapDisplaySets) {
+      sortStudyInstances(mappedDisplaySets);
+    }
     setDisplaySets(mappedDisplaySets);
 
     // Seed indeterminate records so the bar can render immediately
@@ -511,7 +526,9 @@ function PanelStudyBrowser({
           total = 0;
         }
       }
-      if (total > 0) setProgressTotal(ds.displaySetInstanceUID, total);
+      if (total > 0) {
+        setProgressTotal(ds.displaySetInstanceUID, total);
+      }
     }
     // NOTE: intentionally not depending on displaySetsLoadingState to avoid loops
   }, [
@@ -533,7 +550,9 @@ function PanelStudyBrowser({
 
     const onImageLoaded = (e: any) => {
       const imageId = safeImageIdFromEvent(e);
-      if (!imageId) return; // <- prevent "Empty imageId" calls
+      if (!imageId) {
+        return;
+      } // <- prevent "Empty imageId" calls
       const dsUID = getUIDFromImageId(imageId);
       if (dsUID) {
         // console.log('[IMAGE_LOADED]', dsUID);
@@ -543,7 +562,9 @@ function PanelStudyBrowser({
 
     const onVolMod = (e: any) => {
       const volumeId: string | undefined = e?.detail?.volumeId;
-      if (!volumeId) return;
+      if (!volumeId) {
+        return;
+      }
       const dsUID = getUIDFromVolumeId(volumeId);
       if (dsUID) {
         // console.log('[IMAGE_VOLUME_MODIFIED]', dsUID);
@@ -553,7 +574,9 @@ function PanelStudyBrowser({
 
     const onVolDone = (e: any) => {
       const volumeId: string | undefined = e?.detail?.volumeId;
-      if (!volumeId) return;
+      if (!volumeId) {
+        return;
+      }
       const dsUID = getUIDFromVolumeId(volumeId);
       if (dsUID) {
         // console.log('[IMAGE_VOLUME_LOADING_COMPLETED]', dsUID);
@@ -758,7 +781,9 @@ function createTabsWithProgress(
   // Seed with visible/primary study UIDs first to preserve order
   for (const uid of primaryStudyUIDs) {
     const s = studyDisplayList.find(x => x.studyInstanceUid === uid);
-    if (s) studyMap.set(uid, { ...s, displaySets: [] });
+    if (s) {
+      studyMap.set(uid, { ...s, displaySets: [] });
+    }
   }
   // Then add any other studies we fetched for the patient
   for (const s of studyDisplayList) {
