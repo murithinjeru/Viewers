@@ -358,7 +358,8 @@ function PanelStudyBrowser({
   //const tabs = createStudyBrowserTabs(StudyInstanceUIDs, studyDisplayList, displaySets);
 
   const tabs = createTabsWithProgress(StudyInstanceUIDs, studyDisplayList, displaySets);
-
+  //const tabsRaw = createTabsWithProgress(StudyInstanceUIDs, studyDisplayList, displaySets);
+  //const tabs = sanitizeTabsForThumbnails(tabsRaw);
   // ~~ expand / collapse study (and request display set creation)
   function _handleStudyClick(StudyInstanceUID) {
     const shouldCollapseStudy = expandedStudyInstanceUIDs.includes(StudyInstanceUID);
@@ -678,20 +679,32 @@ function _mapDisplaySets(displaySets, displaySetLoadingState, thumbnailImageSrcM
         componentType === 'thumbnail' ? thumbnailDisplaySets : thumbnailNoImageDisplaySets;
 
       const lp = displaySetLoadingState?.[displaySetInstanceUID];
-      const hasTotal = !!lp && lp.total > 0;
-      const isDone = !!lp?.done || (hasTotal && lp.loaded >= lp.total);
-      const pct = hasTotal ? Math.round((lp.loaded / lp.total) * 100) : null;
+      const hasTotal = !!lp && Number(lp.total) > 0;
+      const isDone = !!lp?.done || (hasTotal && Number(lp.loaded) >= Number(lp.total));
+      const pct = hasTotal
+        ? Math.max(0, Math.min(100, Math.round((Number(lp.loaded) / Number(lp.total)) * 100)))
+        : undefined;
       const isLoading = !!lp && !isDone;
-
       // Always-visible line: inject status into the description text
       const baseDesc = ds.SeriesDescription || '';
       const statusSuffix = isLoading
-        ? pct !== null
+        ? pct != null
           ? ` • ${pct}%`
           : ' • Loading…'
         : isDone
           ? ' • ✓'
           : '';
+
+      // Final, safe number for Thumbnail prop (never an object)
+      const loadingProgressNumber = pct != null ? Number(pct) : undefined;
+      if (
+        lp &&
+        typeof lp === 'object' &&
+        (loadingProgressNumber == null || Number.isNaN(loadingProgressNumber))
+      ) {
+        // Helps find any bad cases quickly without crashing
+        console.warn('Non-numeric loadingProgress prevented for', displaySetInstanceUID, lp);
+      }
 
       array.push({
         displaySetInstanceUID,
@@ -701,8 +714,8 @@ function _mapDisplaySets(displaySets, displaySetLoadingState, thumbnailImageSrcM
         modality: ds.Modality,
         seriesDate: formatDate(ds.SeriesDate),
         numInstances: ds.numImageFrames,
-        // keep these so you can upgrade to a custom thumbnail later if you want
-        loadingProgress: lp,
+        // Thumbnail expects a number (percentage). Only pass when we have one.
+        //...(loadingProgressNumber != null ? { loadingProgress: loadingProgressNumber } : {}),
         countIcon: ds.countIcon,
         messages: ds.messages,
         StudyInstanceUID: ds.StudyInstanceUID,
@@ -804,7 +817,42 @@ function createTabsWithProgress(
   return [
     {
       name: 'all',
+      label: 'All',
       studies: Array.from(studyMap.values()),
     },
   ];
+}
+function sanitizeTabsForThumbnails(tabs) {
+  // Deep-ish copy and sanitize loadingProgress on every displaySet
+  return tabs.map(tab => ({
+    ...tab,
+    studies: tab.studies.map(study => ({
+      ...study,
+      displaySets: study.displaySets.map(ds => {
+        const lp = (ds as any).loadingProgress;
+        let loadingProgress: number | undefined = undefined;
+
+        if (typeof lp === 'number' && Number.isFinite(lp)) {
+          loadingProgress = lp;
+        } else if (lp && typeof lp === 'object') {
+          // If any mapper passed { total, loaded, done }, coerce to %
+          const total = Number(lp.total);
+          const loaded = Number(lp.loaded);
+          if (total > 0 && Number.isFinite(total) && Number.isFinite(loaded)) {
+            loadingProgress = Math.max(0, Math.min(100, Math.round((loaded / total) * 100)));
+          }
+        }
+
+        // Optional: dev-only warning to find the source
+        if (lp && typeof lp === 'object' && loadingProgress === undefined) {
+          // eslint-disable-next-line no-console
+          console.warn('Sanitized object loadingProgress on ds', ds.displaySetInstanceUID, lp);
+        }
+
+        // Return a copy with a numeric loadingProgress (or remove it)
+        const { loadingProgress: _ignored, ...rest } = ds as any;
+        return loadingProgress != null ? { ...rest, loadingProgress } : rest;
+      }),
+    })),
+  }));
 }

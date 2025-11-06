@@ -3,8 +3,9 @@ window.config = {
   routerBasename: '/ohif',
   extensions: [],
   modes: ['@ohif/mode-longitudinal'],
-  showStudyList: true,
+  showStudyList: false,
   // below flag is for performance reasons, but it might not work for all servers
+  investigationalUseDialog: { option: 'never' },
   maxNumberOfWebWorkers: 3,
   showWarningMessageForCrossOrigin: false,
   showCPUFallbackMessage: false,
@@ -15,6 +16,11 @@ window.config = {
     displaySetsCount: 15, // how many neighbor displaySets to fetch
     maxNumPrefetchRequests: 15, // concurrency; keep moderate
     order: 'closest', // 'closest' | 'downward' | 'upward'
+  },
+  cornerstone3D: {
+    useNorm16Texture: true, // if the browser exposes EXT_texture_norm16
+    useCPURendering: true, // default; can be toggled as a fallback test
+    preferSizeOverAccuracy: true,
   },
   // Add some customizations to the default e2e datasource
   customizationService: [

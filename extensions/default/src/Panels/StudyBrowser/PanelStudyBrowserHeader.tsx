@@ -15,46 +15,50 @@ function PanelStudyBrowserHeader({
   updateActionIconValue: (actionIcon: actionIcon) => void;
 }) {
   return (
-    <>
-      <div className="bg-muted flex h-[40px] select-none rounded-t p-2">
-        <div className={'flex h-[24px] w-full select-none justify-center self-center text-[14px]'}>
-          <div className="flex w-full items-center gap-[10px]">
-            <div className="flex items-center justify-center">
-              <div className="text-primary flex items-center space-x-1">
-                {actionIcons.map((icon: actionIcon, index) =>
-                  React.createElement(Icons[icon.iconName] || Icons.MissingIcon, {
-                    key: index,
-                    onClick: () => updateActionIconValue(icon),
-                    className: `cursor-pointer`,
-                  })
-                )}
-              </div>
+    <div className="bg-muted flex h-[40px] select-none rounded-t p-2">
+      <div className="flex h-[24px] w-full select-none justify-center self-center text-[14px]">
+        <div className="flex w-full items-center gap-[10px]">
+          {/* Left-side action icons */}
+          <div className="scrollbar-thin scrollbar-thumb-gray-400 scrollbar-track-transparent flex items-center justify-center overflow-x-auto">
+            <div className="text-primary flex items-center space-x-1">
+              {actionIcons.map((icon: actionIcon, index) =>
+                React.createElement(Icons[icon.iconName] || Icons.MissingIcon, {
+                  key: index,
+                  onClick: () => updateActionIconValue(icon),
+                  className: `cursor-pointer hover:text-accent transition-colors`,
+                  style: { width: 18, height: 10 }, // smaller icons
+                })
+              )}
             </div>
-            <div className="ml-auto flex h-full items-center justify-center">
-              <ToggleGroup
-                type="single"
-                value={viewPresets.filter(preset => preset.selected)[0].id}
-                onValueChange={value => {
-                  const selectedViewPreset = viewPresets.find(preset => preset.id === value);
-                  updateViewPresetValue(selectedViewPreset);
-                }}
-              >
-                {viewPresets.map((viewPreset: viewPreset, index) => (
-                  <ToggleGroupItem
-                    key={index}
-                    aria-label={viewPreset.id}
-                    value={viewPreset.id}
-                    className="text-actions-primary"
-                  >
-                    {React.createElement(Icons[viewPreset.iconName] || Icons.MissingIcon)}
-                  </ToggleGroupItem>
-                ))}
-              </ToggleGroup>
-            </div>
+          </div>
+
+          {/* Right-side view presets */}
+          <div className="scrollbar-thin scrollbar-thumb-gray-400 scrollbar-track-transparent ml-auto flex h-full items-center justify-center overflow-x-auto">
+            <ToggleGroup
+              type="single"
+              value={viewPresets.filter(preset => preset.selected)[0].id}
+              onValueChange={value => {
+                const selectedViewPreset = viewPresets.find(preset => preset.id === value);
+                updateViewPresetValue(selectedViewPreset);
+              }}
+            >
+              {viewPresets.map((viewPreset: viewPreset, index) => (
+                <ToggleGroupItem
+                  key={index}
+                  aria-label={viewPreset.id}
+                  value={viewPreset.id}
+                  className="text-actions-primary"
+                >
+                  {React.createElement(Icons[viewPreset.iconName] || Icons.MissingIcon, {
+                    style: { width: 18, height: 10 }, // smaller toggle icons
+                  })}
+                </ToggleGroupItem>
+              ))}
+            </ToggleGroup>
           </div>
         </div>
       </div>
-    </>
+    </div>
   );
 }
 

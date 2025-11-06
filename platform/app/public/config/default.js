@@ -18,6 +18,11 @@ window.config = {
   strictZSpacingForVolumeViewport: true,
   groupEnabledModesFirst: true,
   allowMultiSelectExport: false,
+  cornerstone3D: {
+    useNorm16Texture: true, // if the browser exposes EXT_texture_norm16
+    useCPURendering: true, // default; can be toggled as a fallback test
+    preferSizeOverAccuracy: true,
+  },
   studyPrefetcher: {
     enabled: true,
     displaySetsCount: 15, // how many neighbor displaySets to fetch

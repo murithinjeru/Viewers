@@ -7,4 +7,18 @@ const loadShaders = {
   loader: 'shader-loader',
 };
 
-module.exports = loadShaders;
+//module.exports = loadShaders;
+module.exports = {
+  // ...
+  module: {
+    rules: [
+      loadShaders,
+      {
+        test: /\.js$/,
+        exclude: /node_modules/,
+        use: 'babel-loader',
+      },
+      // ... your other rules (css, ts, assets)
+    ],
+  },
+};

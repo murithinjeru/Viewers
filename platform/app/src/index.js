@@ -20,6 +20,15 @@ import loadDynamicConfig from './loadDynamicConfig';
 export { history } from './utils/history';
 export { preserveQueryParameters, preserveQueryStrings } from './utils/preserveQueryParameters';
 
+// e.g., platform/app/src/index.tsx (or similar)
+if ('serviceWorker' in navigator) {
+  window.addEventListener('load', () => {
+    if (process.env.NODE_ENV === 'production') {
+      navigator.serviceWorker.register('/sw.js');
+    }
+  });
+}
+
 loadDynamicConfig(window.config).then(config_json => {
   // Reset Dynamic config if defined
   if (config_json !== null) {

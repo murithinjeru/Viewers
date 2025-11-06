@@ -87,16 +87,39 @@ export default function PanelStudyBrowserTracking({
         const array =
           componentType === 'thumbnailTracked' ? thumbnailDisplaySets : thumbnailNoImageDisplaySets;
 
-        const loadingProgress = displaySetLoadingState?.[displaySetInstanceUID];
+        const lp = displaySetLoadingState?.[displaySetInstanceUID];
+        const hasTotal = !!lp && Number(lp.total) > 0;
+        const pct = hasTotal
+          ? Math.max(0, Math.min(100, Math.round((Number(lp.loaded) / Number(lp.total)) * 100)))
+          : undefined;
+
+        // Safe string parts
+        const baseDesc =
+          typeof ds.SeriesDescription === 'string'
+            ? ds.SeriesDescription
+            : ds.SeriesDescription != null
+              ? String(ds.SeriesDescription)
+              : '';
+        const suffix = pct != null ? ` • ${pct}%` : lp?.done ? ' • ✓' : '';
+        const description = `${baseDesc}${suffix}`;
 
         array.push({
           displaySetInstanceUID,
-          description: ds.SeriesDescription || '',
+          description,
           seriesNumber: ds.SeriesNumber,
           modality: ds.Modality,
+          //seriesDate: ds.SeriesDate ? new Date(ds.SeriesDate).toLocaleDateString() : '',
           seriesDate: ds.SeriesDate ? new Date(ds.SeriesDate).toLocaleDateString() : '',
           numInstances: ds.numImageFrames,
-          loadingProgress,
+          /**...(lp
+            ? {
+                loadingProgress: {
+                  total: Number(lp.total) || 0,
+                  loaded: Number(lp.loaded) || 0,
+                  ...(lp.done != null ? { done: !!lp.done } : {}),
+                },
+              }
+            : {}), */
           countIcon: ds.countIcon,
           messages: ds.messages,
           StudyInstanceUID: ds.StudyInstanceUID,
@@ -144,6 +167,6 @@ PanelStudyBrowserTracking.propTypes = {
     getImageIdsForDisplaySet: PropTypes.func.isRequired,
   }).isRequired,
   getImageSrc: PropTypes.func.isRequired,
-  getStudiesForPatientByMRN: PropTypes.func.isRequired,
+  //getStudiesForPatientByMRN: PropTypes.func.isRequired,
   requestDisplaySetCreationForStudy: PropTypes.func.isRequired,
 };

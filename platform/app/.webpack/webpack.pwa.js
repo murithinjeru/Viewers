@@ -1,25 +1,23 @@
 // https://developers.google.com/web/tools/workbox/guides/codelabs/webpack
-// ~~ WebPack
 const path = require('path');
 const { merge } = require('webpack-merge');
-const webpack = require('webpack');
 const webpackBase = require('./../../../.webpack/webpack.base.js');
-// ~~ Plugins
+
 const { CleanWebpackPlugin } = require('clean-webpack-plugin');
 const CopyWebpackPlugin = require('copy-webpack-plugin');
 const HtmlWebpackPlugin = require('html-webpack-plugin');
 const { InjectManifest } = require('workbox-webpack-plugin');
 const MiniCssExtractPlugin = require('mini-css-extract-plugin');
-// ~~ Directories
+const Dotenv = require('dotenv-webpack');
+
 const SRC_DIR = path.join(__dirname, '../src');
 const DIST_DIR = path.join(__dirname, '../dist');
 const PUBLIC_DIR = path.join(__dirname, '../public');
-// ~~ Env Vars
+
 const HTML_TEMPLATE = process.env.HTML_TEMPLATE || 'index.html';
 const PUBLIC_URL = process.env.PUBLIC_URL || '/';
 const APP_CONFIG = process.env.APP_CONFIG || 'config/default.js';
 
-// proxy settings
 const PROXY_TARGET = process.env.PROXY_TARGET;
 const PROXY_DOMAIN = process.env.PROXY_DOMAIN;
 const PROXY_PATH_REWRITE_FROM = process.env.PROXY_PATH_REWRITE_FROM;
@@ -28,27 +26,18 @@ const IS_COVERAGE = process.env.COVERAGE === 'true';
 
 const OHIF_PORT = Number(process.env.OHIF_PORT || 3000);
 const ENTRY_TARGET = process.env.ENTRY_TARGET || `${SRC_DIR}/index.js`;
-const Dotenv = require('dotenv-webpack');
-const writePluginImportFile = require('./writePluginImportsFile.js');
-// const MillionLint = require('@million/lint');
 
+const writePluginImportFile = require('./writePluginImportsFile.js');
 const copyPluginFromExtensions = writePluginImportFile(SRC_DIR, DIST_DIR);
 
-const setHeaders = (res, path) => {
-  if (path.indexOf('.gz') !== -1) {
-    res.setHeader('Content-Encoding', 'gzip');
-  } else if (path.indexOf('.br') !== -1) {
-    res.setHeader('Content-Encoding', 'br');
-  }
-  if (path.indexOf('.pdf') !== -1) {
-    res.setHeader('Content-Type', 'application/pdf');
-  } else if (path.indexOf('mp4') !== -1) {
-    res.setHeader('Content-Type', 'video/mp4');
-  } else if (path.indexOf('frames') !== -1) {
-    res.setHeader('Content-Type', 'multipart/related');
-  } else {
-    res.setHeader('Content-Type', 'application/json');
-  }
+const setHeaders = (res, filePath) => {
+  if (filePath.includes('.gz')) res.setHeader('Content-Encoding', 'gzip');
+  else if (filePath.includes('.br')) res.setHeader('Content-Encoding', 'br');
+
+  if (filePath.includes('.pdf')) res.setHeader('Content-Type', 'application/pdf');
+  else if (filePath.includes('mp4')) res.setHeader('Content-Type', 'video/mp4');
+  else if (filePath.includes('frames')) res.setHeader('Content-Type', 'multipart/related');
+  else res.setHeader('Content-Type', 'application/json');
 };
 
 module.exports = (env, argv) => {
@@ -57,37 +46,32 @@ module.exports = (env, argv) => {
   const hasProxy = PROXY_TARGET && PROXY_DOMAIN;
 
   const mergedConfig = merge(baseConfig, {
-    entry: {
-      app: ENTRY_TARGET,
-    },
+    mode: isProdBuild ? 'production' : 'development',
+
+    entry: { app: ENTRY_TARGET },
+
     output: {
       path: DIST_DIR,
       filename: isProdBuild ? '[name].bundle.[chunkhash].js' : '[name].js',
-      publicPath: PUBLIC_URL, // Used by HtmlWebPackPlugin for asset prefix
-      devtoolModuleFilenameTemplate: function (info) {
-        if (isProdBuild) {
-          return `webpack:///${info.resourcePath}`;
-        } else {
-          return 'file:///' + encodeURI(info.absoluteResourcePath);
-        }
-      },
+      publicPath: PUBLIC_URL,
+      devtoolModuleFilenameTemplate: info =>
+        isProdBuild
+          ? `webpack:///${info.resourcePath}`
+          : 'file:///' + encodeURI(info.absoluteResourcePath),
     },
+
     resolve: {
       modules: [
-        // Modules specific to this package
         path.resolve(__dirname, '../node_modules'),
-        // Hoisted Yarn Workspace Modules
         path.resolve(__dirname, '../../../node_modules'),
         SRC_DIR,
       ],
     },
+
     plugins: [
-      // For debugging re-renders
-      // MillionLint.webpack(),
       new Dotenv(),
-      // Clean output.path
       new CleanWebpackPlugin(),
-      // Copy "Public" Folder to Dist
+
       new CopyWebpackPlugin({
         patterns: [
           ...copyPluginFromExtensions,
@@ -95,68 +79,55 @@ module.exports = (env, argv) => {
             from: PUBLIC_DIR,
             to: DIST_DIR,
             toType: 'dir',
-            globOptions: {
-              // Ignore our HtmlWebpackPlugin template file
-              // Ignore our configuration files
-              ignore: ['**/config/**', '**/html-templates/**', '.DS_Store'],
-            },
+            globOptions: { ignore: ['**/config/**', '**/html-templates/**', '.DS_Store'] },
           },
-          {
-            from: '../../../node_modules/onnxruntime-web/dist',
-            to: `${DIST_DIR}/ort`,
-          },
-          // Short term solution to make sure GCloud config is available in output
-          // for our docker implementation
-          {
-            from: `${PUBLIC_DIR}/config/google.js`,
-            to: `${DIST_DIR}/google.js`,
-          },
-          // Copy over and rename our target app config file
-          {
-            from: `${PUBLIC_DIR}/${APP_CONFIG}`,
-            to: `${DIST_DIR}/app-config.js`,
-          },
+          { from: '../../../node_modules/onnxruntime-web/dist', to: `${DIST_DIR}/ort` },
+          { from: `${PUBLIC_DIR}/config/google.js`, to: `${DIST_DIR}/google.js` },
+          { from: `${PUBLIC_DIR}/${APP_CONFIG}`, to: `${DIST_DIR}/app-config.js` },
         ],
       }),
-      // Generate "index.html" w/ correct includes/imports
+
       new HtmlWebpackPlugin({
         template: `${PUBLIC_DIR}/html-templates/${HTML_TEMPLATE}`,
         filename: 'index.html',
-        templateParameters: {
-          PUBLIC_URL: PUBLIC_URL,
-        },
+        templateParameters: { PUBLIC_URL },
       }),
-      // Generate a service worker for fast local loads
-      ...(IS_COVERAGE
-        ? []
-        : [
+
+      // Add Workbox ONLY once, and ONLY in prod (avoid HMR conflicts)
+      ...(isProdBuild || IS_COVERAGE
+        ? [
+            // If you run coverage builds, skip SW entirely:
+            // no Workbox when IS_COVERAGE === true
+          ].filter(Boolean)
+        : []),
+
+      ...(isProdBuild && !IS_COVERAGE
+        ? [
             new InjectManifest({
-              swDest: 'sw.js',
               swSrc: path.join(SRC_DIR, 'service-worker.js'),
-              // Need to exclude the theme as it is updated independently
+              swDest: 'sw.js',
               exclude: [/theme/],
-              // Cache large files for the manifests to avoid warning messages
-              maximumFileSizeToCacheInBytes: 1024 * 1024 * 50,
+              maximumFileSizeToCacheInBytes: 50 * 1024 * 1024,
             }),
-          ]),
+          ]
+        : []),
     ],
-    // https://webpack.js.org/configuration/dev-server/
+
     devServer: {
-      // gzip compression of everything served
-      // Causes Cypress: `wait-on` issue in CI
-      // compress: true,
-      // http2: true,
-      // https: true,
       open: true,
       port: OHIF_PORT,
-      client: {
-        overlay: { errors: true, warnings: false },
-      },
+      client: { overlay: { errors: true, warnings: false } },
+
       proxy: [
         {
-          '/dicomweb': 'http://localhost:5000',
+          context: ['/dicomweb'],
+          target: 'http://localhost:5000',
+          changeOrigin: true,
+          secure: false,
+          logLevel: 'info',
         },
       ],
+
       static: [
         {
           directory: '../../testdata',
@@ -169,29 +140,30 @@ module.exports = (env, argv) => {
           publicPath: '/viewer-testdata',
         },
       ],
-      //public: 'http://localhost:' + 3000,
-      //writeToDisk: true,
+
       historyApiFallback: {
         disableDotRule: true,
         index: PUBLIC_URL + 'index.html',
       },
-      devMiddleware: {
-        writeToDisk: true,
-      },
+
+      devMiddleware: { writeToDisk: true },
     },
   });
 
+  // If PROXY_* envs are set, append (do not replace) another proxy route
   if (hasProxy) {
-    mergedConfig.devServer.proxy = mergedConfig.devServer.proxy || {};
-    mergedConfig.devServer.proxy = {
-      [PROXY_TARGET]: {
-        target: PROXY_DOMAIN,
-        changeOrigin: true,
-        pathRewrite: {
-          [`^${PROXY_PATH_REWRITE_FROM}`]: PROXY_PATH_REWRITE_TO,
-        },
-      },
+    const extraRoute = {
+      context: [PROXY_TARGET],
+      target: PROXY_DOMAIN,
+      changeOrigin: true,
+      pathRewrite:
+        PROXY_PATH_REWRITE_FROM && PROXY_PATH_REWRITE_TO
+          ? { [`^${PROXY_PATH_REWRITE_FROM}`]: PROXY_PATH_REWRITE_TO }
+          : undefined,
     };
+    mergedConfig.devServer.proxy = Array.isArray(mergedConfig.devServer.proxy)
+      ? [...mergedConfig.devServer.proxy, extraRoute]
+      : [extraRoute];
   }
 
   if (isProdBuild) {
@@ -203,9 +175,7 @@ module.exports = (env, argv) => {
     );
   }
 
-  mergedConfig.watchOptions = {
-    ignored: /node_modules\/@cornerstonejs/,
-  };
+  mergedConfig.watchOptions = { ignored: /node_modules\/@cornerstonejs/ };
 
   return mergedConfig;
 };

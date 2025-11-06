@@ -5,11 +5,17 @@ window.config = {
   extensions: [],
   modes: ['@ohif/mode-longitudinal'],
   // below flag is for performance reasons, but it might not work for all servers
-  showWarningMessageForCrossOrigin: true,
+  investigationalUseDialog: { option: 'never' },
+  showWarningMessageForCrossOrigin: false,
   showCPUFallbackMessage: true,
   showLoadingIndicator: true,
   experimentalStudyBrowserSort: false,
   strictZSpacingForVolumeViewport: true,
+  cornerstone3D: {
+    useNorm16Texture: true, // if the browser exposes EXT_texture_norm16
+    useCPURendering: true, // default; can be toggled as a fallback test
+    preferSizeOverAccuracy: true,
+  },
   studyPrefetcher: {
     enabled: true,
     displaySetsCount: 15, // how many neighbor displaySets to fetch
@@ -24,9 +30,9 @@ window.config = {
       configuration: {
         friendlyName: 'Orthanc Server',
         name: 'Orthanc',
-        wadoUriRoot: '/wado',
-        qidoRoot: '/pacs/dicom-web',
-        wadoRoot: '/pacs/dicom-web',
+        qidoRoot: 'http://localhost:8043/dicom-web',
+        wadoUriRoot: 'http://localhost:8043/wado',
+        wadoRoot: 'http://localhost:8043/dicom-web',
         qidoSupportsIncludeField: false,
         imageRendering: 'wadors',
         thumbnailRendering: 'wadors',
