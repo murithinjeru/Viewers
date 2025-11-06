@@ -612,32 +612,58 @@ function PanelStudyBrowser({
         />
       </>
 
-      <StudyBrowser
-        tabs={tabs}
-        servicesManager={servicesManager}
-        activeTabName={activeTabName}
-        expandedStudyInstanceUIDs={expandedStudyInstanceUIDs}
-        onClickStudy={_handleStudyClick}
-        onClickTab={clickedTabName => {
-          setActiveTabName(clickedTabName);
+      {/* Scrollable thumbnails wrapper */}
+      <div
+        className="overflow-y-auto pr-1"
+        style={{
+          // Adjust the height to your layout; this keeps the header fixed and scrolls the grid
+          maxHeight: 'calc(100vh - 110px)',
         }}
-        onClickUntrack={onClickUntrack}
-        onClickThumbnail={() => {}}
-        onDoubleClickThumbnail={onDoubleClickThumbnailHandler}
-        activeDisplaySetInstanceUIDs={activeDisplaySetInstanceUIDs}
-        showSettings={actionIcons.find(icon => icon.id === 'settings')?.value}
-        viewPresets={viewPresets}
-        ThumbnailMenuItems={MoreDropdownMenu({
-          commandsManager,
-          servicesManager,
-          menuItemsKey: 'studyBrowser.thumbnailMenuItems',
-        })}
-        StudyMenuItems={MoreDropdownMenu({
-          commandsManager,
-          servicesManager,
-          menuItemsKey: 'studyBrowser.studyMenuItems',
-        })}
-      />
+        data-ohif-study-browser
+      >
+        <StudyBrowser
+          tabs={tabs}
+          servicesManager={servicesManager}
+          activeTabName={activeTabName}
+          expandedStudyInstanceUIDs={expandedStudyInstanceUIDs}
+          onClickStudy={_handleStudyClick}
+          onClickTab={clickedTabName => {
+            setActiveTabName(clickedTabName);
+          }}
+          onClickUntrack={onClickUntrack}
+          onClickThumbnail={() => {}}
+          onDoubleClickThumbnail={onDoubleClickThumbnailHandler}
+          activeDisplaySetInstanceUIDs={activeDisplaySetInstanceUIDs}
+          showSettings={actionIcons.find(icon => icon.id === 'settings')?.value}
+          viewPresets={viewPresets}
+          ThumbnailMenuItems={MoreDropdownMenu({
+            commandsManager,
+            servicesManager,
+            menuItemsKey: 'studyBrowser.thumbnailMenuItems',
+          })}
+          StudyMenuItems={MoreDropdownMenu({
+            commandsManager,
+            servicesManager,
+            menuItemsKey: 'studyBrowser.studyMenuItems',
+          })}
+        />
+      </div>
+
+      {/* Thumbnail size override (kept here for clarity; you can move to a CSS file) */}
+      <style>{`
+      /* Smaller thumbnails: adjust once here to affect both <img> and <canvas> */
+      [data-ohif-study-browser] [id^="thumbnail-"] img,
+      [data-ohif-study-browser] [id^="thumbnail-"] canvas {
+        width: 92px !important;
+        height: 92px !important;
+        object-fit: cover;
+      }
+
+      /* Tighten tile padding a bit so the grid feels denser */
+      [data-ohif-study-browser] [id^="thumbnail-"] {
+        padding: 0px !important;
+      }
+    `}</style>
     </>
   );
 }
