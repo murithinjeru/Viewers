@@ -109,6 +109,8 @@ const SidePanelWithServices = ({
       onOpen={handleOpen}
       onClose={handleClose}
       onActiveTabIndexChange={handleActiveTabIndexChange}
+      className="flex h-full min-h-0 flex-col" // ✅ ensure the panel itself is 100% tall
+      contentClassName="flex-1 min-h-0 overflow-y-auto" // ✅ content fills and can host our scroller
     />
   );
 };

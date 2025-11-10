@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useRef } from 'react';
+import React, { useState, useLayoutEffect, useEffect, useCallback, useRef } from 'react';
 import { useImageViewer } from '@ohif/ui-next';
 import { useSystem, utils } from '@ohif/core';
 import { useNavigate } from 'react-router-dom';
@@ -596,8 +596,30 @@ function PanelStudyBrowser({
     };
   }, [incProgress, setProgressDone]);
 
+  const scrollHostRef = useRef<HTMLDivElement | null>(null);
+  const [hostSize, setHostSize] = useState({ w: 0, h: 0 });
+
+  useLayoutEffect(() => {
+    const el = scrollHostRef.current;
+    if (!el) {
+      return;
+    }
+    const ro = new ResizeObserver(([entry]) => {
+      const cr = entry.contentRect;
+      setHostSize({ w: Math.round(cr.width), h: Math.round(cr.height) });
+    });
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
+  useEffect(() => {
+    const el = scrollHostRef.current;
+    if (el) {
+      const { clientHeight, scrollHeight } = el;
+      console.log('[StudyBrowser host] clientHeight=', clientHeight, 'scrollHeight=', scrollHeight);
+    }
+  }, []);
   return (
-    <>
+    <div className="flex h-full min-h-0 flex-col">
       <>
         <PanelStudyBrowserHeader
           viewPresets={viewPresets}
@@ -612,43 +634,41 @@ function PanelStudyBrowser({
         />
       </>
 
-      {/* Scrollable thumbnails wrapper */}
-      <div
-        className="overflow-y-auto pr-1"
-        style={{
-          // Adjust the height to your layout; this keeps the header fixed and scrolls the grid
-          maxHeight: 'calc(100vh - 110px)',
-        }}
-        data-ohif-study-browser
-      >
-        <StudyBrowser
-          tabs={tabs}
-          servicesManager={servicesManager}
-          activeTabName={activeTabName}
-          expandedStudyInstanceUIDs={expandedStudyInstanceUIDs}
-          onClickStudy={_handleStudyClick}
-          onClickTab={clickedTabName => {
-            setActiveTabName(clickedTabName);
-          }}
-          onClickUntrack={onClickUntrack}
-          onClickThumbnail={() => {}}
-          onDoubleClickThumbnail={onDoubleClickThumbnailHandler}
-          activeDisplaySetInstanceUIDs={activeDisplaySetInstanceUIDs}
-          showSettings={actionIcons.find(icon => icon.id === 'settings')?.value}
-          viewPresets={viewPresets}
-          ThumbnailMenuItems={MoreDropdownMenu({
-            commandsManager,
-            servicesManager,
-            menuItemsKey: 'studyBrowser.thumbnailMenuItems',
-          })}
-          StudyMenuItems={MoreDropdownMenu({
-            commandsManager,
-            servicesManager,
-            menuItemsKey: 'studyBrowser.studyMenuItems',
-          })}
-        />
+      {/* Content area with explicit bounds */}
+      <div className="flex min-h-0 flex-1">
+        {/* Scrollable thumbnails wrapper fills this area */}
+        <div
+          className="h-full w-full pr-1"
+          data-ohif-study-browser
+        >
+          <StudyBrowser
+            tabs={tabs}
+            servicesManager={servicesManager}
+            activeTabName={activeTabName}
+            expandedStudyInstanceUIDs={expandedStudyInstanceUIDs}
+            onClickStudy={_handleStudyClick}
+            onClickTab={clickedTabName => {
+              setActiveTabName(clickedTabName);
+            }}
+            onClickUntrack={onClickUntrack}
+            onClickThumbnail={() => {}}
+            onDoubleClickThumbnail={onDoubleClickThumbnailHandler}
+            activeDisplaySetInstanceUIDs={activeDisplaySetInstanceUIDs}
+            showSettings={actionIcons.find(icon => icon.id === 'settings')?.value}
+            viewPresets={viewPresets}
+            ThumbnailMenuItems={MoreDropdownMenu({
+              commandsManager,
+              servicesManager,
+              menuItemsKey: 'studyBrowser.thumbnailMenuItems',
+            })}
+            StudyMenuItems={MoreDropdownMenu({
+              commandsManager,
+              servicesManager,
+              menuItemsKey: 'studyBrowser.studyMenuItems',
+            })}
+          />
+        </div>
       </div>
-
       {/* Thumbnail size override (kept here for clarity; you can move to a CSS file) */}
       <style>{`
       /* Smaller thumbnails: adjust once here to affect both <img> and <canvas> */
@@ -659,12 +679,145 @@ function PanelStudyBrowser({
         object-fit: cover;
       }
 
-      /* Tighten tile padding a bit so the grid feels denser */
-      [data-ohif-study-browser] [id^="thumbnail-"] {
-        padding: 0px !important;
-      }
+      /* Host & viewport get a fixed height */
+[data-ohif-study-browser] { height: 100%; }
+[data-ohif-study-browser] [data-radix-scroll-area] { height: 100%; }
+[data-ohif-study-browser] [data-radix-scroll-area-viewport] {
+  height: 100% !important;
+  overflow: auto !important; /* let Radix do the scrolling */
+}
+
+/* 🔑 Allow the viewport's content to grow beyond 100% */
+[data-ohif-study-browser] [data-radix-scroll-area-viewport] > div {
+  height: auto !important;
+  min-height: max-content !important;
+}
+
+/* If StudyBrowser wraps with a role="tabpanel", don't clamp it */
+[data-ohif-study-browser] [role="tabpanel"] {
+  height: auto !important;
+  max-height: none !important;
+}
+
+/* Let the Radix ScrollArea root wrapper stop clipping */
+[data-ohif-study-browser] [data-radix-scroll-area] > div {
+  /* this is the wrapper that Radix gives the class "relative h-full overflow-hidden ..." */
+  overflow: visible !important;
+}
+
+/* Make sure the immediate children inside the viewport can grow */
+[data-ohif-study-browser] [data-radix-scroll-area-viewport] > div,
+[data-ohif-study-browser] [data-radix-scroll-area-viewport] > div > div {
+  height: auto !important;
+  max-height: none !important;
+  min-height: max-content !important;
+  overflow: visible !important;
+}
+
+/* Let the viewport scroll, not clamp */
+[data-ohif-study-browser] [data-radix-scroll-area-viewport] {
+  height: 100% !important;
+  overflow: auto !important;
+}
+
+/* The anonymous first child inside the viewport: don't fix its height */
+[data-ohif-study-browser] [data-radix-scroll-area-viewport] > div:first-child {
+  height: auto !important;
+  min-height: max-content !important;
+}
+
+/* 🔑 The culprit: Radix content wrapper uses flex-1 (fills viewport).
+   Turn it into content-sized so the grid can exceed the viewport height. */
+[data-ohif-study-browser] [data-radix-scroll-area-viewport]
+  > div:first-child
+  > .bg-bkg-low.flex.flex-1 {
+  flex: 0 0 auto !important;
+  height: auto !important;
+  min-height: max-content !important;
+  overflow: visible !important;
+}
+
+/* (Optional) One more level down just in case the next wrapper inherits height */
+[data-ohif-study-browser] [data-radix-scroll-area-viewport]
+  > div:first-child
+  > .bg-bkg-low.flex.flex-1
+  > .flex.flex-col {
+  height: auto !important;
+  min-height: max-content !important;
+}
+
+/* Make any flex-1 wrapper under the viewport content-sized, not viewport-sized */
+[data-ohif-study-browser] [data-radix-scroll-area-viewport] > div :where(.flex)[class*="flex-1"] {
+  flex: 0 0 auto !important;
+  height: auto !important;
+  min-height: max-content !important;
+  overflow: visible !important;
+}
+
+/* Keep viewport scrolling, not clamped */
+[data-ohif-study-browser] [data-radix-scroll-area-viewport] {
+  height: 100% !important;
+  overflow: auto !important;
+}
+
+/* Let the anonymous first child and next wrapper grow naturally */
+[data-ohif-study-browser] [data-radix-scroll-area-viewport] > div,
+[data-ohif-study-browser] [data-radix-scroll-area-viewport] > div > div {
+  height: auto !important;
+  min-height: max-content !important;
+  max-height: none !important;
+  overflow: visible !important;
+}
+
+/* Radix root often has overflow hidden – open it up */
+[data-ohif-study-browser] [data-radix-scroll-area] > div {
+  overflow: visible !important;
+}
+
+/* Let the Radix viewport scroll normally */
+[data-ohif-study-browser] [data-radix-scroll-area-viewport] {
+  height: 100% !important;
+  overflow: auto !important;
+}
+
+/* 🔑 Break the “100% height” chain inside the viewport */
+[data-ohif-study-browser] [data-radix-scroll-area-viewport] .h-full {
+  height: auto !important;
+}
+
+/* And keep descendants content-sized, not clamped */
+[data-ohif-study-browser] [data-radix-scroll-area-viewport] * {
+  max-height: none !important;
+}
+[data-ohif-study-browser] [data-radix-scroll-area] > div {
+  /* Radix root wrapper sometimes clips */
+  overflow: visible !important;
+}
+/* host & viewport sizing */
+[data-ohif-study-browser] { height: 100%; }
+[data-ohif-study-browser] [data-radix-scroll-area] { height: 100%; }
+[data-ohif-study-browser] [data-radix-scroll-area-viewport] {
+  height: 100% !important;
+  overflow: auto !important; /* let the viewport scroll */
+}
+
+/* break the 100%-height chain inside the viewport */
+[data-ohif-study-browser] [data-radix-scroll-area-viewport] .h-full {
+  height: auto !important;
+}
+
+/* keep descendants content-sized, not clamped */
+[data-ohif-study-browser] [data-radix-scroll-area-viewport] * {
+  max-height: none !important;
+}
+
+/* radix root wrapper sometimes clips */
+[data-ohif-study-browser] [data-radix-scroll-area] > div {
+  overflow: visible !important;
+}
+
     `}</style>
-    </>
+    </div>
   );
 }
 

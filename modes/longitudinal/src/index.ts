@@ -253,7 +253,7 @@ function modeFactory({ modeConfiguration }) {
                 leftPanelResizable: false,
                 leftPanelInitialExpandedWidth: 60,
                 leftPanelMinimumExpandedWidth: 60,
-                rightPanels: [tracked.thumbnailList, tracked.measurements],
+                rightPanels: [tracked.thumbnailList],
                 rightPanelResizable: false,
                 rightPanelInitialExpandedWidth: 150,
                 rightPanelMinimumExpandedWidth: 150,
@@ -278,7 +278,7 @@ function modeFactory({ modeConfiguration }) {
               leftPanelResizable: false,
               leftPanelInitialExpandedWidth: 60,
               leftPanelMinimumExpandedWidth: 60,
-              rightPanels: [tracked.thumbnailList, tracked.measurements],
+              rightPanels: [tracked.thumbnailList],
               rightPanelResizable: true,
               rightPanelInitialExpandedWidth: 150,
               rightPanelMinimumExpandedWidth: 150,
@@ -295,24 +295,8 @@ function modeFactory({ modeConfiguration }) {
                   toolGroupId: 'default', // <- essential
                 },
                 {
-                  namespace: dicomsr.viewport,
-                  displaySetsToDisplay: [dicomsr.sopClassHandler, dicomsr.sopClassHandler3D],
-                },
-                {
                   namespace: dicompdf.viewport,
                   displaySetsToDisplay: [dicompdf.sopClassHandler],
-                },
-                {
-                  namespace: dicomSeg.viewport,
-                  displaySetsToDisplay: [dicomSeg.sopClassHandler],
-                },
-                {
-                  namespace: dicomPmap.viewport,
-                  displaySetsToDisplay: [dicomPmap.sopClassHandler],
-                },
-                {
-                  namespace: dicomRT.viewport,
-                  displaySetsToDisplay: [dicomRT.sopClassHandler],
                 },
               ],
             },

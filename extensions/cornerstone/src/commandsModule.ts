@@ -1330,7 +1330,7 @@ function commandsModule({
      * @param {number} volumeQuality - The desired quality level of the volume rendering.
      */
 
-    setVolumeRenderingQulaity: ({ viewportId, volumeQuality }) => {
+    setVolumeRenderingQuality: ({ viewportId, volumeQuality }) => {
       const viewport = cornerstoneViewportService.getCornerstoneViewport(viewportId);
       const { actor } = viewport.getActors()[0];
       const mapper = actor.getMapper();
@@ -2368,8 +2368,8 @@ function commandsModule({
     setViewportPreset: {
       commandFn: actions.setViewportPreset,
     },
-    setVolumeRenderingQulaity: {
-      commandFn: actions.setVolumeRenderingQulaity,
+    setVolumeRenderingQuality: {
+      commandFn: actions.setVolumeRenderingQuality,
     },
     shiftVolumeOpacityPoints: {
       commandFn: actions.shiftVolumeOpacityPoints,

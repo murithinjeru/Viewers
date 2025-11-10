@@ -11,10 +11,12 @@ window.config = {
   showLoadingIndicator: true,
   experimentalStudyBrowserSort: false,
   strictZSpacingForVolumeViewport: true,
-  cornerstone3D: {
-    useNorm16Texture: true, // if the browser exposes EXT_texture_norm16
-    useCPURendering: true, // default; can be toggled as a fallback test
-    preferSizeOverAccuracy: true,
+  cornerstone: {
+    useSharedArrayBuffer: 'FALSE', // run on main thread unless you’ve set COOP/COEP
+    rendering: {
+      useNorm16Texture: true, // preferred (2× less GPU memory than float32)
+      preferSizeOverAccuracy: true, // fallback if norm16 extension isn’t available
+    },
   },
   studyPrefetcher: {
     enabled: true,
@@ -30,9 +32,9 @@ window.config = {
       configuration: {
         friendlyName: 'Orthanc Server',
         name: 'Orthanc',
-        qidoRoot: 'http://localhost:8043/dicom-web',
-        wadoUriRoot: 'http://localhost:8043/wado',
-        wadoRoot: 'http://localhost:8043/dicom-web',
+        wadoUriRoot: '/wado',
+        qidoRoot: '/pacs/dicom-web',
+        wadoRoot: '/pacs/dicom-web',
         qidoSupportsIncludeField: false,
         imageRendering: 'wadors',
         thumbnailRendering: 'wadors',

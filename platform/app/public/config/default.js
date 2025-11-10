@@ -18,10 +18,12 @@ window.config = {
   strictZSpacingForVolumeViewport: true,
   groupEnabledModesFirst: true,
   allowMultiSelectExport: false,
-  cornerstone3D: {
-    useNorm16Texture: true, // if the browser exposes EXT_texture_norm16
-    useCPURendering: true, // default; can be toggled as a fallback test
-    preferSizeOverAccuracy: true,
+  cornerstone: {
+    useSharedArrayBuffer: 'FALSE', // run on main thread unless you’ve set COOP/COEP
+    rendering: {
+      useNorm16Texture: true, // preferred (2× less GPU memory than float32)
+      preferSizeOverAccuracy: true, // fallback if norm16 extension isn’t available
+    },
   },
   studyPrefetcher: {
     enabled: true,

@@ -21,7 +21,7 @@ const setMinMaxWidth = (elem, width?) => {
   }
 
   elem.style.minWidth = width === undefined ? '' : `${width}px`;
-  elem.style.maxWidth = elem.style.minWidth;
+  elem.style.maxWidth = '';
 };
 
 const useResizablePanels = (

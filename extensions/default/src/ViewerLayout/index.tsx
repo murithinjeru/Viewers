@@ -150,7 +150,7 @@ function ViewerLayout({
   const viewportComponents = viewports.map(getViewportComponentData);
 
   return (
-    <div className="flex h-screen w-full flex-row overflow-hidden bg-black">
+    <div className="flex h-screen w-full overflow-hidden bg-black">
       {/* LEFT HEADER COLUMN */}
       <div className="flex w-16 flex-col border-r border-gray-800 md:w-20">
         <ViewerHeader
@@ -162,14 +162,20 @@ function ViewerLayout({
       </div>
 
       {/* MAIN CONTENT AREA */}
-      <div className="flex-1">
+      <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
         {showLoadingIndicator && <LoadingIndicatorProgress className="h-full w-full bg-black" />}
 
-        <ResizablePanelGroup {...resizablePanelGroupProps}>
+        <ResizablePanelGroup
+          className="h-full min-h-0"
+          {...resizablePanelGroupProps}
+        >
           {/* left panels */}
           {hasLeftPanels && (
             <>
-              <ResizablePanel {...resizableLeftPanelProps}>
+              <ResizablePanel
+                {...resizableLeftPanelProps}
+                className="flex min-h-0"
+              >
                 <SidePanelWithServices
                   side="left"
                   isExpanded={!leftPanelClosedState}
@@ -186,8 +192,11 @@ function ViewerLayout({
           )}
 
           {/* viewport grid */}
-          <ResizablePanel {...resizableViewportGridPanelProps}>
-            <div className="flex h-full flex-1 flex-col">
+          <ResizablePanel
+            {...resizableViewportGridPanelProps}
+            className="min-h-0"
+          >
+            <div className="flex h-full min-w-0 flex-1 flex-col">
               <div
                 className="relative flex h-full flex-1 items-center justify-center overflow-hidden bg-black"
                 onMouseEnter={handleMouseEnter}
@@ -209,13 +218,19 @@ function ViewerLayout({
                 disabled={!rightPanelResizable}
                 className={resizableHandleClassName}
               />
-              <ResizablePanel {...resizableRightPanelProps}>
-                <SidePanelWithServices
-                  side="right"
-                  isExpanded={!rightPanelClosedState}
-                  servicesManager={servicesManager}
-                  {...rightPanelProps}
-                />
+              <ResizablePanel
+                {...resizableRightPanelProps}
+                className="flex min-h-0"
+              >
+                {/* Make right panel shrink so inner overflow can scroll */}
+                <div className="flex h-full min-h-0 flex-col overflow-hidden">
+                  <SidePanelWithServices
+                    side="right"
+                    isExpanded={!rightPanelClosedState}
+                    servicesManager={servicesManager}
+                    {...rightPanelProps}
+                  />
+                </div>
               </ResizablePanel>
             </>
           )}

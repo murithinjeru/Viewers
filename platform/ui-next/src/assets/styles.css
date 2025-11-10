@@ -34,6 +34,27 @@
   @apply bg-secondary-dark;
   background-color: #041c4a;
 }
+/* Firefox */
+[data-ohif-study-browser] {
+  scrollbar-width: thin;
+}
+
+/* Chromium/WebKit */
+[data-ohif-study-browser]::-webkit-scrollbar {
+  width: 10px;
+}
+[data-ohif-study-browser]::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.25);
+  border-radius: 8px;
+}
+[data-ohif-study-browser]::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+/* Keep wheel from bubbling to the page */
+[data-ohif-study-browser] {
+  overscroll-behavior: contain;
+}
 
 /* INVISIBLE SCROLLBAR */
 .invisible-scrollbar {
