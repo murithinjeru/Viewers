@@ -815,6 +815,34 @@ function PanelStudyBrowser({
 [data-ohif-study-browser] [data-radix-scroll-area] > div {
   overflow: visible !important;
 }
+/* Allow series descriptions in thumbnails to wrap */
+/* Make thumbnail captions wrap, regardless of Tailwind utilities on the node */
+[data-ohif-study-browser] [id^="thumbnail-"] div[class*="w-\\[128px\\]"] {
+  width: 100% !important;            /* let it fill the tile */
+  white-space: normal !important;     /* allow wrapping */
+  overflow: visible !important;       /* show wrapped lines */
+  text-overflow: clip !important;     /* no ellipsis */
+  word-break: break-word !important;  /* break long tokens */
+  overflow-wrap: anywhere !important; /* break anywhere if needed */
+  display: block !important;
+}
+
+/* Also neutralize the exact blockers if they appear without w-[128px] */
+[data-ohif-study-browser] [id^="thumbnail-"] [class*="whitespace-nowrap"] {
+  white-space: normal !important;
+}
+[data-ohif-study-browser] [id^="thumbnail-"] [class*="overflow-hidden"] {
+  overflow: visible !important;
+}
+[data-ohif-study-browser] [id^="thumbnail-"] [class*="text-ellipsis"] {
+  text-overflow: clip !important;
+}
+
+/* Allow the caption container to grow vertically */
+[data-ohif-study-browser] [id^="thumbnail-"] .leading-4 {
+  line-height: 1.2rem !important;     /* optional: tighter line height */
+}
+
 
     `}</style>
     </div>

@@ -254,9 +254,9 @@ function modeFactory({ modeConfiguration }) {
                 leftPanelInitialExpandedWidth: 60,
                 leftPanelMinimumExpandedWidth: 60,
                 rightPanels: [tracked.thumbnailList],
-                rightPanelResizable: false,
-                rightPanelInitialExpandedWidth: 150,
-                rightPanelMinimumExpandedWidth: 150,
+                rightPanelResizable: true,
+                rightPanelInitialExpandedWidth: 100,
+                rightPanelMinimumExpandedWidth: 100,
                 leftPanelClosed: false,
                 rightPanelClosed: false,
                 viewports: [
@@ -280,8 +280,8 @@ function modeFactory({ modeConfiguration }) {
               leftPanelMinimumExpandedWidth: 60,
               rightPanels: [tracked.thumbnailList],
               rightPanelResizable: true,
-              rightPanelInitialExpandedWidth: 150,
-              rightPanelMinimumExpandedWidth: 150,
+              rightPanelInitialExpandedWidth: 100,
+              rightPanelMinimumExpandedWidth: 100,
               leftPanelClosed: false,
               rightPanelClosed: false,
               viewports: [
