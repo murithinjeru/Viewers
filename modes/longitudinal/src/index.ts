@@ -2,6 +2,7 @@ import i18n from 'i18next';
 import { id } from './id';
 import initToolGroups from './initToolGroups';
 import toolbarButtons from './toolbarButtons';
+import { installWebGLLifecycleGuards } from '../../../extensions/cornerstone/src/commandsModule'; // adjust the path as needed
 
 // Allow this mode by excluding non-imaging modalities such as SR, SEG
 // Also, SM is not a simple imaging modalities, so exclude it.
@@ -84,6 +85,7 @@ function modeFactory({ modeConfiguration }) {
     onModeEnter: function ({ servicesManager, extensionManager, commandsManager }: withAppTypes) {
       const { measurementService, toolbarService, toolGroupService, customizationService } =
         servicesManager.services;
+      installWebGLLifecycleGuards(servicesManager);
 
       measurementService.clearMeasurements();
 

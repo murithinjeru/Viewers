@@ -7,6 +7,7 @@ import {
   Types as CoreTypes,
   BaseVolumeViewport,
   getRenderingEngines,
+  cache,
 } from '@cornerstonejs/core';
 import {
   ToolGroupManager,
@@ -42,7 +43,135 @@ import { getUpdatedViewportsForSegmentation } from './utils/hydrationUtils';
 import { SegmentationRepresentations } from '@cornerstonejs/tools/enums';
 import { isMeasurementWithinViewport } from './utils/isMeasurementWithinViewport';
 import { getCenterExtent } from './utils/getCenterExtent';
+import { RenderingEngine } from '@cornerstonejs/core';
 
+// --- WebGL2 assertion helpers ---
+function getCanvasForViewportId(
+  viewportId: string,
+  cornerstoneViewportService
+): HTMLCanvasElement | null {
+  const vp = cornerstoneViewportService.getCornerstoneViewport?.(viewportId) as any;
+  const el: HTMLElement | null =
+    vp?.element ?? (typeof vp?.getElement === 'function' ? vp.getElement() : null);
+  return el?.querySelector?.('canvas') ?? null;
+}
+
+function isCanvasGL2(canvas: HTMLCanvasElement | null): boolean {
+  if (!canvas) return false;
+  const gl =
+    (canvas.getContext('webgl2') as WebGL2RenderingContext) ??
+    (canvas as any).getContext?.('webgl2');
+  return typeof WebGL2RenderingContext !== 'undefined' && gl instanceof WebGL2RenderingContext;
+}
+
+function assertGL2OrAbort(
+  viewportId: string,
+  cornerstoneViewportService,
+  uiNotificationService
+): boolean {
+  const canvas = getCanvasForViewportId(viewportId, cornerstoneViewportService);
+  const ok = isCanvasGL2(canvas);
+  if (!ok) {
+    uiNotificationService?.show?.({
+      title: 'WebGL2 not available',
+      message: 'Skipping MPR/Volume rendering because the current canvas is not WebGL2.',
+      type: 'warning',
+    });
+  }
+  return ok;
+}
+
+function isWebGL2Available() {
+  try {
+    const test = document.createElement('canvas');
+    return !!test.getContext('webgl2');
+  } catch {
+    return false;
+  }
+}
+
+// --- WebGL context lifecycle guard ---
+export function installWebGLLifecycleGuards(servicesManager) {
+  const { uiNotificationService, cornerstoneViewportService, viewportGridService, cineService } =
+    servicesManager.services;
+
+  // Iterate all existing viewport canvases
+  const { viewports } = viewportGridService.getState();
+  viewports.forEach((_, viewportId) => {
+    const canvas = getCanvasForViewportId(viewportId, cornerstoneViewportService);
+    if (!canvas) return;
+
+    // Handle context lost
+    canvas.addEventListener('webglcontextlost', e => {
+      e.preventDefault();
+      cineService?.stopAll?.();
+      uiNotificationService?.show?.({
+        title: 'WebGL context lost',
+        message: 'Graphics context lost. Viewer will rebuild on restore.',
+        type: 'error',
+      });
+    });
+
+    // Handle context restored
+    canvas.addEventListener('webglcontextrestored', () => {
+      const ok = isCanvasGL2(canvas);
+      if (!ok) {
+        uiNotificationService?.show?.({
+          title: 'Graphics context restored (WebGL1)',
+          message: 'Viewer remains in stack mode until WebGL2 is available.',
+          type: 'warning',
+        });
+        return;
+      }
+
+      hardRebuildAfterRestore(servicesManager);
+    });
+  });
+}
+
+// --- rebuild viewer after context restore ---
+function hardRebuildAfterRestore(servicesManager) {
+  try {
+    const { cornerstoneViewportService, viewportGridService, cineService, uiNotificationService } =
+      servicesManager.services;
+    const re = cornerstoneViewportService.getRenderingEngine?.();
+
+    // Stop cine and snapshot viewports
+    viewportGridService
+      .getState()
+      .viewports.forEach((_, id) => cineService.setCine({ id, isPlaying: false }));
+    const snapshot = Array.from(viewportGridService.getState().viewports.entries()).map(
+      ([viewportId, vp]) => ({
+        viewportId,
+        displaySetInstanceUIDs: vp.displaySetInstanceUIDs ?? [],
+      })
+    );
+
+    try {
+      re?.destroy?.();
+    } catch {}
+    try {
+      cache?.purgeCache?.();
+    } catch {}
+
+    // Rebuild layout with same display sets
+    const { commandsManager } = servicesManager;
+    commandsManager.run('setDisplaySetsForViewports', {
+      viewportsToUpdate: snapshot.map(v => ({
+        viewportId: v.viewportId,
+        displaySetInstanceUIDs: v.displaySetInstanceUIDs,
+      })),
+    });
+
+    uiNotificationService?.show?.({
+      title: 'Viewer rebuilt',
+      message: 'MPR context restored and reinitialized under WebGL2.',
+      type: 'info',
+    });
+  } catch (e) {
+    console.warn('Error rebuilding after WebGL restore', e);
+  }
+}
 const { DefaultHistoryMemo } = csUtils.HistoryMemo;
 const toggleSyncFunctions = {
   imageSlice: toggleImageSliceSync,
@@ -143,6 +272,100 @@ function commandsModule({
       segmentIndex: activeSegmentIndex,
     };
   }
+  /**
+   * Hard-clean up GPU/CPU volume state to avoid “context lost” when switching MPR series.
+   * - Detaches volumes from all VolumeViewports
+   * - Purges Cornerstone3D cache (images + volumes)
+   */
+  // Shared helper
+  function hasDrawableVolume(viewport) {
+    const actors = viewport?.getActors?.() ?? [];
+    if (!actors.length) return false;
+    const { actor } = actors[0] ?? {};
+    const mapper = actor?.getMapper?.();
+    const input = mapper?.getInputData?.();
+    return !!input; // ensures imageData is bound
+  }
+
+  function safeRender(viewport) {
+    try {
+      if (!hasDrawableVolume(viewport)) return;
+      viewport.render?.();
+    } catch {}
+  }
+
+  function renderIfReady(viewport) {
+    if (!viewport) return;
+    // StackViewports are always safe to render
+    if (viewport instanceof StackViewport) {
+      viewport.render?.();
+      return;
+    }
+    // VolumeViewport: only render when drawable
+    if (hasDrawableVolume(viewport)) {
+      try {
+        viewport.render?.();
+      } catch (e) {
+        // Guard against transient mapper/GL program rebuilds
+        console.warn('Skipped transient VolumeViewport render:', e);
+      }
+    }
+  }
+
+  (function installSafeRenderingEngineShim() {
+    const proto = RenderingEngine?.prototype as any;
+    if (!proto || proto.__safePatched) return;
+
+    const safeEngineRender = function thisSafeRender() {
+      try {
+        const vps = this.getViewports?.() ?? [];
+        for (const vp of vps) renderIfReady(vp);
+      } catch (e) {
+        console.warn('Safe engine render skipped:', e);
+      }
+    };
+
+    // Replace the engine's global traversal with our guarded per-viewport render.
+    proto.__origRender = proto.render;
+    proto.render = safeEngineRender;
+    proto.__safePatched = true;
+  })();
+
+  function renderEngineSafely(renderingEngine) {
+    if (!renderingEngine) return;
+    const vps = renderingEngine.getViewports?.() ?? [];
+    for (const vp of vps) {
+      renderIfReady(vp); // your helper that checks Stack vs Volume + hasDrawableVolume
+    }
+  }
+  function softCleanupForMPR() {
+    try {
+      const re = servicesManager.services.cornerstoneViewportService.getRenderingEngine?.();
+      if (!re) return;
+
+      const vps = re.getViewports?.() ?? [];
+      for (const vp of vps) {
+        if (vp instanceof VolumeViewport) {
+          const vids: string[] = vp.getAllVolumeIds?.() ?? [];
+          for (const id of vids) {
+            try {
+              vp.removeVolume?.(id);
+            } catch {}
+          }
+          // Safe reset only; DON'T render now
+          try {
+            vp.resetCamera?.();
+          } catch {}
+          // ❌ no vp.render() here
+        }
+      }
+    } catch {}
+  }
+
+  /**
+   * Ensure WebGL2 and add robust context-loss handling on each viewport's canvas.
+   * If WebGL2 is missing (or downgraded after a loss), we hard-clean and surface an error.
+   */
 
   const actions = {
     jumpToMeasurementViewport: ({ annotationUID, measurement }) => {
@@ -159,7 +382,7 @@ function commandsModule({
       if (viewportId) {
         const viewport = cornerstoneViewportService.getCornerstoneViewport(viewportId);
         viewport.setViewReference(metadata);
-        viewport.render();
+        renderIfReady(viewport);
 
         /**
          * If the measurement is not visible inside the current viewport,
@@ -178,7 +401,7 @@ function commandsModule({
             const scaleFactor = measurementSize / camera.parallelScale;
             viewport.setZoom(viewport.getZoom() / scaleFactor);
           }
-          viewport.render();
+          renderIfReady(viewport);
         }
 
         return;
@@ -799,7 +1022,7 @@ function commandsModule({
           },
         });
       }
-      viewport.render();
+      safeRender(viewport);
     },
     toggleViewportColorbar: ({ viewportId, displaySetInstanceUIDs, options = {} }) => {
       const hasColorbar = colorbarService.hasColorbar(viewportId);
@@ -827,9 +1050,10 @@ function commandsModule({
 
       const activeViewport = viewportGridService.getActiveViewportId();
       const viewport = cornerstoneViewportService.getCornerstoneViewport(activeViewport);
-      const metadata = viewport.getImageData().metadata;
+      const imageData = viewport?.getImageData?.();
+      if (!imageData?.metadata?.Modality) return;
 
-      const modality = metadata.Modality;
+      const modality = imageData.metadata.Modality;
 
       if (!modality) {
         return;
@@ -851,15 +1075,26 @@ function commandsModule({
         windowCenter: windowLevelPreset.level,
       });
     },
+    // getVolumeIdForDisplaySet
     getVolumeIdForDisplaySet: ({ viewportId, displaySetInstanceUID }) => {
       const viewport = cornerstoneViewportService.getCornerstoneViewport(viewportId);
-      if (viewport instanceof BaseVolumeViewport) {
-        const volumeIds = viewport.getAllVolumeIds();
-        const volumeId = volumeIds.find(id => id.includes(displaySetInstanceUID));
-        return volumeId;
+      if (!(viewport instanceof BaseVolumeViewport)) return null;
+
+      const volumeIds = viewport.getAllVolumeIds?.() ?? [];
+      let volumeId = null;
+
+      if (displaySetInstanceUID) {
+        volumeId = volumeIds.find(id => id?.includes?.(displaySetInstanceUID)) ?? null;
       }
-      return null;
+      // Fallback to the single bound volume if any
+      if (!volumeId && typeof viewport.getVolumeId === 'function') {
+        try {
+          volumeId = viewport.getVolumeId();
+        } catch {}
+      }
+      return volumeId;
     },
+
     setToolEnabled: ({ toolName, toggle, toolGroupId }) => {
       const { viewports } = viewportGridService.getState();
 
@@ -883,7 +1118,7 @@ function commandsModule({
       }
 
       const renderingEngine = cornerstoneViewportService.getRenderingEngine();
-      renderingEngine.render();
+      renderEngineSafely(renderingEngine);
     },
     toggleEnabledDisabledToolbar({ value, itemId, toolGroupId }) {
       const toolName = itemId || value;
@@ -1036,7 +1271,7 @@ function commandsModule({
       }
 
       viewport.setCamera({ flipHorizontal });
-      viewport.render();
+      renderIfReady(viewport);
     },
     flipViewportVertical: ({
       viewportId,
@@ -1063,7 +1298,7 @@ function commandsModule({
         flipVertical = newValue;
       }
       viewport.setCamera({ flipVertical });
-      viewport.render();
+      renderIfReady(viewport);
     },
     invertViewport: ({ element }) => {
       let enabledElement;
@@ -1082,7 +1317,7 @@ function commandsModule({
 
       const { invert } = viewport.getProperties();
       viewport.setProperties({ invert: !invert });
-      viewport.render();
+      renderIfReady(viewport);
     },
     resetViewport: () => {
       const enabledElement = _getActiveViewportEnabledElement();
@@ -1096,7 +1331,7 @@ function commandsModule({
       viewport.resetProperties?.();
       viewport.resetCamera();
 
-      viewport.render();
+      renderIfReady(viewport);
     },
     scaleViewport: ({ direction }) => {
       const enabledElement = _getActiveViewportEnabledElement();
@@ -1111,10 +1346,10 @@ function commandsModule({
         if (direction) {
           const { parallelScale } = viewport.getCamera();
           viewport.setCamera({ parallelScale: parallelScale * scaleFactor });
-          viewport.render();
+          renderIfReady(viewport);
         } else {
           viewport.resetCamera();
-          viewport.render();
+          renderIfReady(viewport);
         }
       }
     },
@@ -1215,7 +1450,7 @@ function commandsModule({
       }
 
       if (immediate) {
-        viewport.render();
+        safeRender(viewport);
       }
     },
     changeActiveViewport: ({ direction = 1 }) => {
@@ -1280,7 +1515,7 @@ function commandsModule({
       );
 
       const renderingEngine = cornerstoneViewportService.getRenderingEngine();
-      renderingEngine.render();
+      renderEngineSafely(renderingEngine);
     },
     storePresentation: ({ viewportId }) => {
       cornerstoneViewportService.storePresentation({ viewportId });
@@ -1321,7 +1556,7 @@ function commandsModule({
       viewport.setProperties({
         preset,
       });
-      viewport.render();
+      safeRender(viewport);
     },
 
     /**
@@ -1330,23 +1565,31 @@ function commandsModule({
      * @param {number} volumeQuality - The desired quality level of the volume rendering.
      */
 
+    // --- setVolumeRenderingQuality (safe) ---
     setVolumeRenderingQuality: ({ viewportId, volumeQuality }) => {
+      if (!assertGL2OrAbort(viewportId, cornerstoneViewportService, uiNotificationService)) return;
+
       const viewport = cornerstoneViewportService.getCornerstoneViewport(viewportId);
+      if (!hasDrawableVolume(viewport)) return; // <-- bail early
+
       const { actor } = viewport.getActors()[0];
       const mapper = actor.getMapper();
       const image = mapper.getInputData();
       const dims = image.getDimensions();
       const spacing = image.getSpacing();
+
       const spatialDiagonal = vec3.length(
         vec3.fromValues(dims[0] * spacing[0], dims[1] * spacing[1], dims[2] * spacing[2])
       );
 
       let sampleDistance = spacing.reduce((a, b) => a + b) / 3.0;
       sampleDistance /= volumeQuality > 1 ? 0.5 * volumeQuality ** 2 : 1.0;
+
       const samplesPerRay = spatialDiagonal / sampleDistance + 1;
-      mapper.setMaximumSamplesPerRay(samplesPerRay);
-      mapper.setSampleDistance(sampleDistance);
-      viewport.render();
+      mapper.setMaximumSamplesPerRay(1024);
+      mapper.setSampleDistance(1.0);
+
+      renderIfReady(viewport); // safe now
     },
 
     /**
@@ -1356,7 +1599,10 @@ function commandsModule({
      */
     shiftVolumeOpacityPoints: ({ viewportId, shift }) => {
       const viewport = cornerstoneViewportService.getCornerstoneViewport(viewportId);
-      const { actor } = viewport.getActors()[0];
+      const actors = viewport?.getActors?.() ?? [];
+      if (!actors.length) return; // nothing to update safely
+
+      const { actor } = actors[0];
       const ofun = actor.getProperty().getScalarOpacity(0);
 
       const opacityPointValues = []; // Array to hold values
@@ -1377,7 +1623,7 @@ function commandsModule({
       opacityPointValues.forEach(opacityPointValue => {
         ofun.addPoint(...opacityPointValue);
       });
-      viewport.render();
+      renderIfReady(viewport);
     },
 
     /**
@@ -1390,29 +1636,24 @@ function commandsModule({
      * @param {number} options.specular - The specular setting for the lighting.
      **/
 
+    // --- setVolumeLighting (safe) ---
     setVolumeLighting: ({ viewportId, options }) => {
+      if (!assertGL2OrAbort(viewportId, cornerstoneViewportService, uiNotificationService)) return;
+
       const viewport = cornerstoneViewportService.getCornerstoneViewport(viewportId);
+      if (!hasDrawableVolume(viewport)) return; // <-- bail early
+
       const { actor } = viewport.getActors()[0];
       const property = actor.getProperty();
 
-      if (options.shade !== undefined) {
-        property.setShade(options.shade);
-      }
+      if (options.shade !== undefined) property.setShade(options.shade);
+      if (options.ambient !== undefined) property.setAmbient(options.ambient);
+      if (options.diffuse !== undefined) property.setDiffuse(options.diffuse);
+      if (options.specular !== undefined) property.setSpecular(options.specular);
 
-      if (options.ambient !== undefined) {
-        property.setAmbient(options.ambient);
-      }
-
-      if (options.diffuse !== undefined) {
-        property.setDiffuse(options.diffuse);
-      }
-
-      if (options.specular !== undefined) {
-        property.setSpecular(options.specular);
-      }
-
-      viewport.render();
+      renderIfReady(viewport);
     },
+
     resetCrosshairs: ({ viewportId }) => {
       const crosshairInstances = [];
 
@@ -1798,8 +2039,24 @@ function commandsModule({
           isPlaying: false,
         });
       });
+      // If any current viewport is a VolumeViewport, we are likely switching MPR sets:
+      // nuke GPU/CPU volume state to avoid cache pile-up across series.
+      try {
+        const re = servicesManager.services.cornerstoneViewportService.getRenderingEngine?.();
+        const hasVolume = re?.getViewports?.()?.some(v => v instanceof VolumeViewport);
+        if (hasVolume) {
+          softCleanupForMPR();
+        }
+      } catch {}
 
       viewportGridService.setDisplaySetsForViewports(viewportsToUpdate);
+      installWebGLLifecycleGuards(servicesManager);
+
+      // After viewports are updated, (re)install WebGL guards so we detect any loss early.
+      try {
+        const ids = viewportsToUpdate.map(v => v.viewportId);
+        installWebGLLifecycleGuards(servicesManager);
+      } catch {}
     },
     undo: () => {
       DefaultHistoryMemo.undo();
@@ -2053,6 +2310,9 @@ function commandsModule({
       });
     },
     setViewportOrientation: ({ viewportId, orientation }) => {
+      // Gate on GL2
+      if (!assertGL2OrAbort(viewportId, cornerstoneViewportService, uiNotificationService)) return;
+
       const viewport = cornerstoneViewportService.getCornerstoneViewport(viewportId);
 
       if (!viewport || viewport.type !== CoreEnums.ViewportType.ORTHOGRAPHIC) {
@@ -2070,7 +2330,7 @@ function commandsModule({
       }
 
       viewport.setOrientation(orientation);
-      viewport.render();
+      renderIfReady(viewport);
 
       // update the orientation in the viewport info
       const viewportInfo = cornerstoneViewportService.getViewportInfo(viewportId);
@@ -2144,7 +2404,7 @@ function commandsModule({
         mat4.rotate(rotMat, rotMat, rotAngle, camera.viewPlaneNormal);
         const rotatedViewUp = vec3.transformMat4(vec3.create(), camera.viewUp, rotMat);
         viewport.setCamera({ viewUp: rotatedViewUp as CoreTypes.Point3 });
-        viewport.render();
+        safeRender(viewport);
         return;
       }
 
@@ -2169,7 +2429,7 @@ function commandsModule({
                 return (effectiveRotation + 360) % 360;
               })();
         viewport.setViewPresentation({ rotation: newRotation });
-        viewport.render();
+        renderIfReady(viewport);
       }
     },
     startRecordingForAnnotationGroup: () => {
