@@ -264,7 +264,16 @@ function modeFactory({ modeConfiguration }) {
                 viewports: [
                   {
                     namespace: '@ohif/extension-cornerstone.viewportModule.cornerstone',
-                    displaySetsToDisplay: [ohif.sopClassHandler],
+                    displaySetsToDisplay: [
+                      ohif.sopClassHandler,
+                      dicomvideo.sopClassHandler,
+                      ohif.wsiSopClassHandler,
+                    ],
+                    toolGroupId: 'default', // <- essential
+                  },
+                  {
+                    namespace: dicompdf.viewport,
+                    displaySetsToDisplay: [dicompdf.sopClassHandler],
                   },
                 ],
               },
